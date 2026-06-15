@@ -33,6 +33,26 @@ main{max-width:1320px;margin:0 auto;padding:22px 18px}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:20px;margin-bottom:16px}
 .panel-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--line)}
 h2{font-size:17px;font-weight:900;letter-spacing:-.02em}
+h3{font-size:14px;font-weight:800;color:var(--navy);margin:18px 0 8px}
+h3:first-child{margin-top:0}
+p.lead{font-size:13.5px;line-height:1.7;color:var(--ink);margin-bottom:4px}
+ul.clean{list-style:none;padding:0;margin:0}
+ul.clean li{padding:8px 0 8px 28px;border-bottom:1px solid var(--soft);position:relative;font-size:13px}
+ul.clean li:last-child{border-bottom:none}
+ul.clean li:before{content:"●";color:var(--blue);position:absolute;left:6px;top:9px;font-size:9px}
+ul.bullets{margin:6px 0 6px 0;padding-left:22px}
+ul.bullets li{margin-bottom:6px;font-size:13px;line-height:1.55}
+.role-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+.role-card{background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.role-card .role-title{font-size:10.5px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:var(--blue);margin-bottom:6px}
+.role-card .role-name{font-size:14px;font-weight:800;color:var(--navy)}
+.members-card{background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:16px}
+.members-card .role-title{font-size:10.5px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:var(--blue);margin-bottom:10px}
+.members-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px 18px}
+.member{font-size:13px;font-weight:600;color:var(--ink);padding:4px 0}
+.tag-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.tag{background:#F3EEFF;color:var(--purple);border-radius:999px;padding:5px 12px;font-size:11.5px;font-weight:700}
+.pending{color:var(--muted);font-style:italic;font-size:12.5px}
 .sub{margin:4px 0 0;color:var(--muted);font-size:12.5px;line-height:1.45;max-width:840px}
 .chip{display:inline-flex;align-items:center;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:800;white-space:nowrap;font-family:'DM Mono',monospace}
 .chip-blue{background:#EAF2FF;color:var(--blue)}.chip-green{background:#E8F7EF;color:var(--green)}
@@ -143,8 +163,8 @@ tr:hover td{background:#FAFCFF}
 .bs-neutral{background:#F0F4F9;color:var(--muted);display:inline-flex;align-items:center;gap:4px;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:800}
 .empty{padding:48px;text-align:center;color:var(--muted)}
 ::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:#b0bccc;border-radius:3px}
-@media(max-width:1080px){.audit-grid,.kpis,.charts-grid,.meta{grid-template-columns:1fr 1fr}}
-@media(max-width:680px){.audit-grid,.kpis,.charts-grid,.meta,.sub-items{grid-template-columns:1fr}.wide{grid-column:1}}
+@media(max-width:1080px){.audit-grid,.kpis,.charts-grid,.meta{grid-template-columns:1fr 1fr}.role-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:680px){.audit-grid,.kpis,.charts-grid,.meta,.sub-items{grid-template-columns:1fr}.wide{grid-column:1}.role-grid,.members-grid{grid-template-columns:1fr}}
 @media(max-width:760px){
   .hero{padding:0 12px}
   .hero-inner{padding:8px 0;gap:6px 0}
@@ -175,9 +195,9 @@ tr:hover td{background:#FAFCFF}
     </div>
   </div>
   <nav class="tabs">
-    <button class="tab active" onclick="show('coleta')">📝 Coleta</button>
+    <button class="tab active" onclick="show('coleta',this)">📝 Coleta</button>
     <button class="tab" onclick="window.open('dashboard.html','_blank')">📊 Análise</button>
-    <button class="tab" onclick="window.open('sobre.html','_blank')">🏥 Sobre a Comissão</button>
+    <button class="tab" onclick="show('sobre',this)">🏥 Sobre a Comissão</button>
   </nav>
 </div>
 </header>
@@ -229,6 +249,100 @@ tr:hover td{background:#FAFCFF}
     <div class="actions">
       <button class="primary" onclick="save()">💾 Salvar auditoria</button>
       <button class="secondary" onclick="clearForm()">🗑 Limpar formulário</button>
+    </div>
+  </div>
+
+</section>
+
+<!-- ══════════════════════ SOBRE A COMISSÃO ══════════════════════ -->
+<section id="sobre" class="page">
+
+<div class="panel">
+    <div class="panel-head">
+      <h2>Apresentação</h2>
+    </div>
+    <p class="lead">A Comissão de Revisão de Prontuários do Hospital Paulo Sacramento tem como finalidade assegurar a qualidade, integridade, completude, rastreabilidade e adequação ética e legal dos registros em prontuário, contribuindo para a segurança do paciente, a continuidade do cuidado e a conformidade com as normas vigentes.</p>
+
+    <h3>Legislação pertinente</h3>
+    <ul class="clean">
+      <li>Resolução CFM nº 1.638/2002</li>
+      <li>Lei nº 13.787/2018</li>
+      <li>LGPD — Lei Geral de Proteção de Dados</li>
+      <li>Código de Ética Médica</li>
+      <li>Manual ONA</li>
+      <li>Requisitos da JCI</li>
+    </ul>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h2>Composição da comissão</h2>
+    </div>
+
+    <div class="role-grid">
+      <div class="role-card">
+        <div class="role-title">Presidente</div>
+        <div class="role-name">Gabriel Cruvinel Macor</div>
+      </div>
+      <div class="role-card">
+        <div class="role-title">Vice-presidente</div>
+        <div class="role-name">Rafael de Mello Leão</div>
+      </div>
+      <div class="role-card">
+        <div class="role-title">Secretário(a)</div>
+        <div class="role-name">Raiene Camargo Mlaker Gonçalves</div>
+      </div>
+    </div>
+
+    <div class="members-card">
+      <div class="role-title">Membros efetivos</div>
+      <div class="members-grid">
+        <div class="member">Amanda Helena Miguel</div>
+        <div class="member">Ana Beatriz Souza Gonçalves</div>
+        <div class="member">Ariovaldo Silva Junior</div>
+        <div class="member">Erli Teresinha Marques</div>
+        <div class="member">Fernanda Rampazzo Sena Pavini</div>
+        <div class="member">Iara Cristina Bueno</div>
+        <div class="member">Larissa Peixoto Lopes</div>
+        <div class="member">Orlando De Jesus Junior</div>
+        <div class="member">Rodrigo Facundes Silva</div>
+        <div class="member">Sueh Pereira Cordeiro</div>
+        <div class="member">Telma Batista dos Santos Raze</div>
+        <div class="member">Vanessa Pereira Tavares Silva</div>
+      </div>
+    </div>
+
+    <h3>Regimento interno</h3>
+    <p class="pending">A ser disponibilizado.</p>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h2>Objetivos</h2>
+    </div>
+    <ul class="bullets">
+      <li>Garantir a qualidade da documentação assistencial.</li>
+      <li>Avaliar a completude dos prontuários.</li>
+      <li>Identificar não conformidades.</li>
+      <li>Promover educação continuada.</li>
+      <li>Produzir indicadores.</li>
+      <li>Subsidiar processos de acreditação.</li>
+    </ul>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h2>Protocolos e documentos</h2>
+      <p class="sub">A disponibilizar:</p>
+    </div>
+    <div class="tag-row">
+      <span class="tag">Manual de preenchimento do prontuário</span>
+      <span class="tag">POP de auditoria</span>
+      <span class="tag">Checklists</span>
+      <span class="tag">Fluxos</span>
+      <span class="tag">Regimento interno</span>
+      <span class="tag">Resoluções CFM</span>
+      <span class="tag">Modelos de parecer</span>
     </div>
   </div>
 
@@ -356,9 +470,11 @@ let current={}, data=[], charts=[];
 function $(id){return document.getElementById(id)}
 function load(){try{data=JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){data=[]}}
 function persist(){localStorage.setItem(KEY,JSON.stringify(data))}
-function show(id){
+function show(id,btn){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   $(id).classList.add('active');
+  document.querySelectorAll('.tabs .tab').forEach(t=>t.classList.remove('active'));
+  if(btn) btn.classList.add('active');
 }
 function norm(v){return v==='não'?'nao':v==='não se aplica'?'na':v}
 function label(v){return v==='sim'?'sim':v==='nao'?'não':v==='na'?'N/A':'—'}
