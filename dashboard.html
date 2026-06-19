@@ -147,6 +147,7 @@ tr:hover td{background:#FAFCFF}
 ::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:#b0bccc;border-radius:3px}
 @media(max-width:1080px){.audit-grid,.kpis,.charts-grid,.meta{grid-template-columns:1fr 1fr}}
 @media(max-width:680px){.audit-grid,.kpis,.charts-grid,.meta,.sub-items{grid-template-columns:1fr}.wide{grid-column:1}}
+@media(max-width:900px){.auditor-grid{grid-template-columns:1fr!important}}
 @media(max-width:760px){
   .hero{padding:0 12px}
   .hero-inner{padding:8px 0;gap:6px 0}
@@ -520,13 +521,16 @@ function dashApply(){
   </tbody></table></div></div>
   <div class="panel" style="margin-top:0">
     <h2 style="margin-bottom:14px">Auditorias por auditor</h2>
-    <div class="tablewrap"><table><thead><tr><th>Auditor</th><th>Nº de auditorias</th><th>Conformidade média</th></tr></thead><tbody>
-    ${byAuditor.map(a=>`<tr>
-      <td>${a.k}</td>
-      <td style="text-align:center"><b style="font-family:'DM Mono',monospace">${a.n}</b></td>
-      <td><b style="color:${a.score>=90?'var(--green)':a.score>=75?'var(--amber)':'var(--red)'}">${a.score}%</b></td>
-    </tr>`).join('')}
-    </tbody></table></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+      <div class="tablewrap"><table><thead><tr><th>Auditor</th><th>Nº</th><th>Conf. média</th></tr></thead><tbody>
+      ${byAuditor.map(a=>`<tr>
+        <td>${a.k}</td>
+        <td style="text-align:center"><b style="font-family:'DM Mono',monospace">${a.n}</b></td>
+        <td><b style="color:${a.score>=90?'var(--green)':a.score>=75?'var(--amber)':'var(--red)'}">${a.score}%</b></td>
+      </tr>`).join('')}
+      </tbody></table></div>
+      <div class="chart" style="height:${Math.max(180, byAuditor.length*32)}px"><canvas id="cAuditor"></canvas></div>
+    </div>
   </div>
   <div class="panel" style="margin-top:0">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
@@ -551,6 +555,10 @@ function dashApply(){
   } else {$('cTrend').parentElement.innerHTML='<h3>Tendência mensal</h3><div class="empty" style="padding:30px;font-size:13px">Mínimo 2 meses de dados</div>';}
   mkChart('cDist','doughnut',['Sim','Não','N/A'],[{data:[tSim,tNao,tNa],backgroundColor:['rgba(23,138,74,.8)','rgba(199,54,47,.8)','rgba(199,138,20,.8)'],borderWidth:2,borderColor:'white'}],{plugins:{legend:{display:true,position:'bottom'}}});
   mkChart('cWorst','bar',worst.slice(0,10).map(x=>`${x.num}. ${x.text.substring(0,48)}…`),[{data:worst.slice(0,10).map(x=>x.pct),backgroundColor:worst.slice(0,10).map(x=>x.pct>=90?'rgba(23,138,74,.75)':x.pct>=75?'rgba(199,138,20,.75)':'rgba(199,54,47,.75)'),borderRadius:6}],{indexAxis:'y',scales:{x:{beginAtZero:true,max:100,ticks:{callback:v=>v+'%'}}}});
+  if(byAuditor.length){
+    const aColors=byAuditor.map(a=>a.score>=90?'rgba(23,138,74,.8)':a.score>=75?'rgba(199,138,20,.8)':'rgba(199,54,47,.8)');
+    mkChart('cAuditor','bar',byAuditor.map(a=>a.k),[{data:byAuditor.map(a=>a.n),backgroundColor:aColors,borderRadius:6,label:'Auditorias'}],{indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' '+ctx.raw+' auditoria(s)'}}},scales:{x:{beginAtZero:true,ticks:{stepSize:1},title:{display:true,text:'Nº de auditorias'}}}});
+  }
 }
 
 /* ═══════════════════════════════════════════════
