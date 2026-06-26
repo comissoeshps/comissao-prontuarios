@@ -225,30 +225,38 @@ const ITEMS=[
   {num:3,domain:"Identificação",novo:false,text:"Todos os impressos estão identificados com os 2 marcadores (nome e data)?",opts:["sim","não"],benchmark:"JCI IPSG.1 — meta: 100%"},
   {num:4,domain:"Plano terapêutico",novo:false,text:"Há plano terapêutico registrado no prontuário?",opts:["sim","não"],benchmark:"QMENTUM — meta: 95%"},
   {num:5,domain:"Comunicação",novo:false,text:"Resultado crítico de exame (lab./imagem) está evidenciado em prontuário?",opts:["sim","não","não se aplica"],benchmark:"JCI IPSG.2.1 — meta: 95%"},
-  {num:6,domain:"Comunicação",novo:false,text:"A ferramenta SBAR foi realizada quando indicada?",opts:["sim","não","não se aplica"],benchmark:"JCI IPSG.2 — meta: 90%"},
-  {num:7,domain:"Medicação",novo:false,text:"Há evidência de administração e checagem de medicamentos em prontuário?",opts:["sim","não","não se aplica"],benchmark:"JCI MMU.7 — meta: 95%"},
-  {num:8,domain:"Consentimento",novo:false,text:"O termo anestésico descreve a técnica anestésica proposta?",opts:["sim","não","não se aplica"],benchmark:"CFM 1802/2006 — meta: 100%"},
-  {num:9,domain:"Bundles de segurança",novo:false,text:"Bundle de broncoaspiração aplicado e registrado?",opts:["sim","não","não se aplica"],benchmark:"ANVISA/IHI — meta: 90%"},
-  {num:10,domain:"Bundles de segurança",novo:false,text:"Bundle de lesão por pressão aplicado e registrado?",opts:["sim","não","não se aplica"],benchmark:"ANVISA/IHI — meta: 90%"},
-  {num:11,domain:"Bundles de segurança",novo:false,text:"Bundle de infecção de corrente sanguínea (CVC) aplicado e registrado?",opts:["sim","não","não se aplica"],benchmark:"ANVISA/IHI — meta: 90%"},
-  {num:12,domain:"Bundles de segurança",novo:false,text:"Bundle de infecção urinária (SVD) aplicado e registrado?",opts:["sim","não","não se aplica"],benchmark:"ANVISA/IHI — meta: 90%"},
-  {num:13,domain:"Bundles de segurança",novo:false,text:"Bundle de PAV (ventilação mecânica) aplicado e registrado?",opts:["sim","não","não se aplica"],benchmark:"ANVISA/IHI — meta: 90%"},
-  {num:14,domain:"Segurança do paciente",novo:false,text:"Risco de queda avaliado e descrito em prontuário?",opts:["sim","não","não se aplica"],benchmark:"JCI IPSG.6 — meta: 95%"},
-  {num:15,domain:"Enfermagem / SAE",novo:false,text:"SAE completa (evolução, prescrição e diagnóstico de enfermagem)?",opts:["sim","não","não se aplica"],benchmark:"COFEN 358/2009 — meta: 100%"},
-  {num:16,domain:"Enfermagem / SAE",novo:false,text:"Prevenção de queda descrita adequadamente na SAE?",opts:["sim","não","não se aplica"],benchmark:"COFEN — meta: 95%"},
-  {num:17,domain:"Enfermagem / SAE",novo:false,text:"Medidas de suporte para risco de LPP prescritas na SAE?",opts:["sim","não","não se aplica"],benchmark:"COFEN — meta: 95%"},
-  {num:18,domain:"Enfermagem / SAE",novo:false,text:"Dispositivos em uso descritos no prontuário (drenos, cateteres, sondas, ventilação etc.)?",opts:["sim","não","não se aplica"],benchmark:"QMENTUM — meta: 95%"},
-  {num:19,domain:"Enfermagem / SAE",novo:true,text:"Sinais vitais registrados de acordo com o solicitado pela equipe médica?",opts:["sim","não","não se aplica"],benchmark:"COFEN — meta: 95%"},
-  {num:20,domain:"Anestesia / Cirurgia",novo:false,text:"Evolução pós-operatória da anestesia registrada?",opts:["sim","não","não se aplica"],benchmark:"CFM 1802/2006 — meta: 100%"},
-  {num:21,domain:"Anestesia / Cirurgia",novo:false,text:"Alta da recuperação pós-anestésica registrada pela anestesia?",opts:["sim","não","não se aplica"],benchmark:"CFM 1802/2006 — meta: 100%"},
-  {num:22,domain:"Evolução médica",novo:true,text:"Alergias e reações adversas prévias estão registradas?",opts:["sim","não","não se aplica"],benchmark:"JCI IPSG.3 / ISMP — meta: 100%",ref:"Evento sentinela; ausência é causa de incidentes graves de medicação."},
-  {num:23,domain:"Evolução médica",novo:true,text:"Hipótese diagnóstica / CID está registrado no prontuário?",opts:["sim","não"],benchmark:"CFM Res. 1638/2002 — meta: 100%",ref:"Obrigatoriedade legal. Item frequente de glosa técnica (ANS)."},
-  {num:24,domain:"Evolução médica",novo:true,text:"Há evolução médica diária validada?",opts:["sim","não","não se aplica"],benchmark:"CFM 1638/2002 / QMENTUM — meta: 100%",ref:"Principal falha documental em auditorias nacionais (CFM/CRM)."},
-  {num:25,domain:"Evolução médica",novo:true,text:"Prescrição médica validada em prontuário?",opts:["sim","não","não se aplica"],benchmark:"CFM 1638/2002 / RDC ANVISA 36/2013 — meta: 100%",ref:"Prescrição ilegível é causa de erro de medicação."},
-  {num:26,domain:"Evolução médica",novo:true,text:"Risco nutricional avaliado e registrado (NRS-2002, MUST ou equivalente)?",opts:["sim","não","não se aplica"],benchmark:"JCI COP.4 / ESPEN — meta: 85%",ref:"Triagem nutricional nas primeiras 48h: meta JCI, associada à redução de mortalidade."},
-  {num:27,domain:"Evolução médica",novo:true,text:"Resumo de alta registrado em prontuário?",opts:["sim","não","não se aplica"],benchmark:"CFM 1638/2002 / JCI ACC.3.2 — meta: 100%",ref:"Documento legal obrigatório após toda internação. Distinto de orientação de alta."},
-  {num:28,domain:"Evolução médica",novo:true,text:"Avaliação de risco de tromboembolismo venoso (TEV) registrada?",opts:["sim","não","não se aplica"],benchmark:"JCI COP.8.3 / Protocolo MS — meta: 90%",ref:"Componente do Programa Nacional de Segurança do Paciente (PNSP)."},
-  {num:29,domain:"Alta hospitalar",novo:false,text:"Prontuário descreve plano de alta e seguimento pós-alta?",opts:["sim","não"],benchmark:"JCI ACC.3 — meta: 90%"}
+  {num:6,domain:"Medicação",novo:false,text:"Há evidência de administração e checagem de medicamentos em prontuário?",opts:["sim","não","não se aplica"],benchmark:"JCI MMU.7 — meta: 95%"},
+  {num:7,domain:"Segurança do paciente",novo:false,text:"Risco de queda avaliado e descrito em prontuário?",opts:["sim","não","não se aplica"],benchmark:"JCI IPSG.6 — meta: 95%"},
+  {num:8,domain:"Enfermagem / SAE",novo:false,text:"SAE completa (evolução, prescrição e diagnóstico de enfermagem)?",opts:["sim","não","não se aplica"],benchmark:"COFEN 358/2009 — meta: 100%"},
+  {num:9,domain:"Enfermagem / SAE",novo:false,text:"Prevenção de queda descrita adequadamente na SAE?",opts:["sim","não","não se aplica"],benchmark:"COFEN — meta: 95%"},
+  {num:10,domain:"Enfermagem / SAE",novo:false,text:"Medidas de suporte para risco de LPP prescritas na SAE?",opts:["sim","não","não se aplica"],benchmark:"COFEN — meta: 95%"},
+  {num:11,domain:"Anestesia / Cirurgia",novo:false,text:"Evolução pós-operatória da anestesia registrada?",opts:["sim","não","não se aplica"],benchmark:"CFM 1802/2006 — meta: 100%"},
+  {num:12,domain:"Anestesia / Cirurgia",novo:false,text:"Alta da recuperação pós-anestésica registrada pela anestesia?",opts:["sim","não","não se aplica"],benchmark:"CFM 1802/2006 — meta: 100%"},
+  {num:13,domain:"Evolução médica",novo:true,text:"Alergias e reações adversas prévias estão registradas?",opts:["sim","não","não se aplica"],benchmark:"JCI IPSG.3 / ISMP — meta: 100%",ref:"Evento sentinela; ausência é causa de incidentes graves de medicação."},
+  {num:14,domain:"Evolução médica",novo:true,text:"Hipótese diagnóstica / CID está registrado no prontuário?",opts:["sim","não"],benchmark:"CFM Res. 1638/2002 — meta: 100%",ref:"Obrigatoriedade legal. Item frequente de glosa técnica (ANS)."},
+  {num:15,domain:"Evolução médica",novo:true,text:"Há evolução médica diária validada?",opts:["sim","não","não se aplica"],benchmark:"CFM 1638/2002 / QMENTUM — meta: 100%",ref:"Principal falha documental em auditorias nacionais (CFM/CRM)."},
+  {num:16,domain:"Evolução médica",novo:true,text:"Prescrição médica validada em prontuário?",opts:["sim","não","não se aplica"],benchmark:"CFM 1638/2002 / RDC ANVISA 36/2013 — meta: 100%",ref:"Prescrição ilegível é causa de erro de medicação."},
+  {num:17,domain:"Evolução médica",novo:true,text:"Risco nutricional avaliado e registrado (NRS-2002, MUST ou equivalente)?",opts:["sim","não","não se aplica"],benchmark:"JCI COP.4 / ESPEN — meta: 85%",ref:"Triagem nutricional nas primeiras 48h: meta JCI, associada à redução de mortalidade."},
+  {num:18,domain:"Evolução médica",novo:true,text:"Resumo de alta registrado em prontuário?",opts:["sim","não","não se aplica"],benchmark:"CFM 1638/2002 / JCI ACC.3.2 — meta: 100%",ref:"Documento legal obrigatório após toda internação. Distinto de orientação de alta."},
+  {num:19,domain:"Evolução médica",novo:true,text:"Avaliação de risco de tromboembolismo venoso (TEV) registrada?",opts:["sim","não","não se aplica"],benchmark:"JCI COP.8.3 / Protocolo MS — meta: 90%",ref:"Componente do Programa Nacional de Segurança do Paciente (PNSP)."},
+  {num:20,domain:"Alta hospitalar",novo:false,text:"Prontuário descreve plano de alta e seguimento pós-alta?",opts:["sim","não"],benchmark:"JCI ACC.3 — meta: 90%"}
+];
+const ITEMS_FISICO=[
+  {num:1,domain:"Comunicação",text:"A ferramenta SBAR foi realizada quando indicada?",opts:["sim","não","não se aplica"]},
+  {num:2,domain:"Consentimento",text:"O termo anestésico descreve a técnica anestésica proposta?",opts:["sim","não","não se aplica"]},
+  {num:3,domain:"Bundles de segurança",text:"Bundle de broncoaspiração aplicado e registrado?",opts:["sim","não","não se aplica"]},
+  {num:4,domain:"Bundles de segurança",text:"Bundle de lesão por pressão aplicado e registrado?",opts:["sim","não","não se aplica"]},
+  {num:5,domain:"Bundles de segurança",text:"Bundle de infecção de corrente sanguínea (CVC) aplicado e registrado?",opts:["sim","não","não se aplica"]},
+  {num:6,domain:"Bundles de segurança",text:"Bundle de infecção urinária (SVD) aplicado e registrado?",opts:["sim","não","não se aplica"]},
+  {num:7,domain:"Bundles de segurança",text:"Bundle de PAV (ventilação mecânica) aplicado e registrado?",opts:["sim","não","não se aplica"]},
+  {num:8,domain:"Enfermagem / SAE",text:"Dispositivos em uso descritos no prontuário (drenos, cateteres, sondas, ventilação etc.)?",opts:["sim","não","não se aplica"]},
+  {num:9,domain:"Enfermagem / SAE",text:"Sinais vitais registrados de acordo com o solicitado pela equipe médica?",opts:["sim","não","não se aplica"]},
+  {num:10,domain:"Consentimento",text:"Paciente cirúrgico possui termo de consentimento cirúrgico?",opts:["sim","não","não se aplica"]},
+  {num:11,domain:"Consentimento",text:"O termo de consentimento tem assinatura do cirurgião?",opts:["sim","não","não se aplica"]},
+  {num:12,domain:"Consentimento",text:"O termo anestésico tem assinatura do anestesista?",opts:["sim","não","não se aplica"]},
+  {num:13,domain:"Segurança do paciente",text:"Orientação sobre risco de queda assinada pelo paciente/responsável?",opts:["sim","não","não se aplica"]},
+  {num:14,domain:"Evolução médica",text:"Dor avaliada com escala validada (EVA, NRS, FLACC ou equivalente)?",opts:["sim","não","não se aplica"]},
+  {num:15,domain:"Evolução médica",text:"Potencial de glosa técnica identificado no prontuário?",opts:["sim","não","não se aplica"]}
 ];
 
 /* ═══════════════════════════════════════════════
@@ -312,10 +320,17 @@ let sheetsLoadError=null;
 
 function rowToRecord(row){
   const answers={};
+  const fisAnswers={};
   ITEMS.forEach(i=>{
     const v=row['item_'+i.num];
     if(v!==undefined&&v!=='')answers[i.num]=norm(v);
   });
+  if(typeof ITEMS_FISICO!=='undefined'){
+    ITEMS_FISICO.forEach(i=>{
+      const v=row['fis_item_'+i.num];
+      if(v!==undefined&&v!=='')fisAnswers[i.num]=norm(v);
+    });
+  }
   allMultiKeys().forEach(k=>{
     const v=row[k];
     if(v!==undefined&&v!=='')answers[k]=norm(v);
@@ -329,7 +344,10 @@ function rowToRecord(row){
     auditor:row.auditor||'',
     diasIntern:row.dias_internacao||'',
     desfecho:row.desfecho||'',
-    answers
+    tipoProntuario:row.tipo_prontuario||'online',
+    observacoes:row.observacoes||'',
+    answers,
+    fisAnswers
   };
 }
 
@@ -445,7 +463,7 @@ function dash(){
     root.innerHTML=`
     <div class="panel">
       <div class="panel-head">
-        <div><h2>Dashboard executivo</h2><p class="sub">Indicadores sobre os 29 itens auditados (dados do Google Sheets, todos os auditores). Para análise multiprofissional detalhada, use a aba dedicada.</p></div>
+        <div><h2>Dashboard executivo</h2><p class="sub">Indicadores sobre os 20 itens online e 15 itens físicos (dados do Google Sheets, todos os auditores). Para análise multiprofissional detalhada, use a aba dedicada.</p></div>
         <div class="filters">
           <select id="filterSector" onchange="dashApply()"><option value="">Todos os setores</option>${secOpts.map(s=>`<option>${s}</option>`).join('')}</select>
           <select id="filterMonth" onchange="dashApply()"><option value="">Todos os meses</option>${monOpts.map(m=>`<option>${m}</option>`).join('')}</select>
