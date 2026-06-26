@@ -415,7 +415,7 @@ tr:hover td{background:#FAFCFF}
           <div id="headerAvatar" style="width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--cyan));display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;color:#fff;flex-shrink:0;overflow:hidden;border:2px solid var(--line)"></div>
           <div>
             <div id="headerName" style="font-size:15px;font-weight:900;color:var(--navy)"></div>
-            <div style="font-size:11px;color:var(--muted);margin-top:1px">Membro — Comissão de Revisão de Prontuários</div>
+            <div id="headerRole" style="font-size:11px;color:var(--muted);margin-top:1px">Membro — Comissão de Revisão de Prontuários</div>
           </div>
         </div>
         <button onclick="show('login',null);buildProfilePage()" style="border:1.5px solid var(--line);background:#fff;border-radius:10px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;color:var(--navy);font-family:'DM Sans',sans-serif">Ver meu perfil</button>
@@ -701,12 +701,14 @@ function tryLogin(){
   // Preencher cabeçalho do auditor
   const hname=$('headerName');
   const havatar=$('headerAvatar');
+  const hrole=$('headerRole');
   if(hname) hname.textContent=currentUser.name;
   if(havatar){
     const initials=currentUser.name.split(' ').map(p=>p[0]).join('').slice(0,2).toUpperCase();
     const savedAvatar=localStorage.getItem('avatar_'+currentUser.login);
     havatar.innerHTML=savedAvatar?`<img src="${savedAvatar}" style="width:100%;height:100%;object-fit:cover" alt="foto">`:`<span>${initials}</span>`;
   }
+  if(hrole){const pd=getProfileData();if(pd.cargo)hrole.textContent=pd.cargo;}
   // Mostrar botão Sair
   const sairBtn=$('tab-sair');
   if(sairBtn) sairBtn.style.display='flex';
@@ -747,32 +749,84 @@ function logout(){
 }
 
 /* = PERFIL = */
+function getProfileData(){
+  const key='profile_'+currentUser.login;
+  try{ return JSON.parse(localStorage.getItem(key)||'{}'); }catch(e){ return {}; }
+}
+function saveProfileData(obj){
+  const key='profile_'+currentUser.login;
+  const existing=getProfileData();
+  localStorage.setItem(key, JSON.stringify({...existing,...obj}));
+}
+
 function buildProfilePage(){
   const name=currentUser.name;
   const initials=name.split(' ').map(p=>p[0]).join('').slice(0,2).toUpperCase();
   const avatarKey='avatar_'+currentUser.login;
   const savedAvatar=localStorage.getItem(avatarKey);
   const avatarHtml=savedAvatar
-    ? `<img src="${savedAvatar}" alt="foto">`
+    ? `<img src="${savedAvatar}" style="width:100%;height:100%;object-fit:cover" alt="foto">`
     : `<span>${initials}</span>`;
+  const pd=getProfileData();
 
-  // Contar prontuários do auditor no Sheets
   const container=$('profileContent');
   if(!container)return;
   container.innerHTML=`
   <div class="panel">
-    <div class="profile-header">
-      <div class="profile-avatar" id="avatarBtn" onclick="$('avatarInput').click()" title="Clique para alterar foto">
-        ${avatarHtml}
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+      <h2>Meu perfil</h2>
+      <button onclick="toggleEditProfile()" id="btnEditProfile" style="border:1.5px solid var(--blue);background:#fff;border-radius:10px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;color:var(--blue);font-family:'DM Sans',sans-serif;transition:.15s">Editar perfil</button>
+    </div>
+
+    <!-- Visualização -->
+    <div id="profileView">
+      <div class="profile-header">
+        <div class="profile-avatar" id="avatarBtn" onclick="document.getElementById('avatarInput').click()" title="Clique para alterar foto">
+          ${avatarHtml}
+        </div>
+        <div style="flex:1;min-width:0">
+          <div class="profile-name">${name}</div>
+          <div id="viewCargo" class="profile-role">${pd.cargo||'Membro — Comissão de Revisão de Prontuários'}</div>
+          <div id="viewEmail" style="font-size:12px;color:var(--blue);margin-top:2px">${pd.email||currentUser.login+'@comissaohps'}</div>
+          <div id="viewTelefone" style="font-size:12px;color:var(--muted);margin-top:2px">${pd.telefone?'📞 '+pd.telefone:''}</div>
+          <div id="viewEspecialidade" style="font-size:12px;color:var(--muted);margin-top:2px">${pd.especialidade?'🏥 '+pd.especialidade:''}</div>
+        </div>
       </div>
-      <div>
-        <div class="profile-name">${name}</div>
-        <div class="profile-role">Membro — Comissão de Revisão de Prontuários</div>
-        <div class="profile-email" id="profileEmail">${currentUser.login}@comissaohps</div>
+      <input type="file" id="avatarInput" accept="image/*" style="display:none" onchange="saveAvatar(this)">
+      ${pd.bio?`<div style="margin-top:14px;padding:12px 14px;background:var(--soft);border-radius:10px;font-size:13px;color:var(--ink);line-height:1.6">${pd.bio}</div>`:''}
+    </div>
+
+    <!-- Formulário de edição (oculto por padrão) -->
+    <div id="profileEdit" style="display:none">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:4px">
+        <div class="login-field">
+          <label>Cargo / Função</label>
+          <input id="editCargo" type="text" value="${pd.cargo||''}" placeholder="Ex.: Enfermeira auditora">
+        </div>
+        <div class="login-field">
+          <label>E-mail</label>
+          <input id="editEmail" type="email" value="${pd.email||''}" placeholder="seu@email.com">
+        </div>
+        <div class="login-field">
+          <label>Telefone / WhatsApp</label>
+          <input id="editTelefone" type="tel" value="${pd.telefone||''}" placeholder="(19) 9 0000-0000">
+        </div>
+        <div class="login-field">
+          <label>Especialidade / Área</label>
+          <input id="editEspecialidade" type="text" value="${pd.especialidade||''}" placeholder="Ex.: Enfermagem, Fisioterapia…">
+        </div>
+      </div>
+      <div class="login-field" style="margin-top:4px">
+        <label>Sobre mim (opcional)</label>
+        <textarea id="editBio" placeholder="Apresentação breve, interesses, área de atuação…" style="width:100%;border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:13px;resize:vertical;min-height:70px;outline:none;transition:.15s" onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--line)'">${pd.bio||''}</textarea>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:12px">
+        <button onclick="saveProfileEdit()" class="login-btn" style="flex:1;margin:0;padding:10px">Salvar alterações</button>
+        <button onclick="toggleEditProfile()" style="flex:1;border:1.5px solid var(--line);background:#fff;border-radius:10px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;color:var(--muted);font-family:'DM Sans',sans-serif">Cancelar</button>
       </div>
     </div>
-    <input type="file" id="avatarInput" accept="image/*" style="display:none" onchange="saveAvatar(this)">
   </div>
+
   <div class="panel">
     <h2 style="margin-bottom:14px">Minha atividade</h2>
     <div class="stat-grid">
@@ -785,6 +839,46 @@ function buildProfilePage(){
   </div>`;
 
   loadMyAuditorias();
+}
+
+function toggleEditProfile(){
+  const view=$('profileView');
+  const edit=$('profileEdit');
+  const btn=$('btnEditProfile');
+  if(!view||!edit||!btn) return;
+  const editing=edit.style.display==='block';
+  view.style.display=editing?'block':'none';
+  edit.style.display=editing?'none':'block';
+  btn.textContent=editing?'Editar perfil':'Cancelar edição';
+}
+
+function saveProfileEdit(){
+  const cargo=document.getElementById('editCargo')?.value.trim()||'';
+  const email=document.getElementById('editEmail')?.value.trim()||'';
+  const telefone=document.getElementById('editTelefone')?.value.trim()||'';
+  const especialidade=document.getElementById('editEspecialidade')?.value.trim()||'';
+  const bio=document.getElementById('editBio')?.value.trim()||'';
+
+  saveProfileData({cargo,email,telefone,especialidade,bio});
+
+  // Atualizar view sem rebuildar a página inteira
+  const vCargo=$('viewCargo'); if(vCargo) vCargo.textContent=cargo||'Membro — Comissão de Revisão de Prontuários';
+  const vEmail=$('viewEmail'); if(vEmail) vEmail.textContent=email||currentUser.login+'@comissaohps';
+  const vTel=$('viewTelefone'); if(vTel) vTel.textContent=telefone?'📞 '+telefone:'';
+  const vEsp=$('viewEspecialidade'); if(vEsp) vEsp.textContent=especialidade?'🏥 '+especialidade:'';
+
+  // Voltar para view
+  toggleEditProfile();
+
+  // Feedback visual
+  const btn=$('btnEditProfile');
+  if(btn){
+    const orig=btn.textContent;
+    btn.textContent='✅ Salvo!';
+    btn.style.color='var(--green)';
+    btn.style.borderColor='var(--green)';
+    setTimeout(()=>{btn.textContent='Editar perfil';btn.style.color='var(--blue)';btn.style.borderColor='var(--blue)';},2000);
+  }
 }
 
 function saveAvatar(input){
