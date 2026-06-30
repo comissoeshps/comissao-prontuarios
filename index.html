@@ -920,30 +920,49 @@ async function submitFirstAccess(){
   const p1=document.getElementById('firstPass1').value;
   const p2=document.getElementById('firstPass2').value;
   const err=document.getElementById('firstAccessErr');
+  const btn=document.querySelector('#firstAccessScreen .login-btn');
   err.textContent='';
 
+  if(!login){ err.textContent='Sessão expirada. Volte e faça login novamente.'; return; }
   if(!email||!email.includes('@')){ err.textContent='Informe um e-mail válido.'; return; }
   if(p1.length<6){ err.textContent='A senha deve ter pelo menos 6 caracteres.'; return; }
   if(p1!==p2){ err.textContent='As senhas não coincidem.'; return; }
 
-  // Salvar localmente
-  localStorage.setItem('hps_pass_'+login, hashPass(p1));
-  localStorage.setItem('hps_email_'+login, email);
+  if(btn){ btn.textContent='Salvando…'; btn.disabled=true; }
 
-  // Salvar no Firebase
-  if(fbDB){
-    try{
-      await fbDB.ref('auth/'+login).set({
+  try{
+    // 1. Salvar localmente (sempre funciona, não depende de Firebase)
+    localStorage.setItem('hps_pass_'+login, hashPass(p1));
+    localStorage.setItem('hps_email_'+login, email);
+
+    // 2. Tentar salvar no Firebase (opcional — não bloqueia o login se falhar)
+    if(fbDB){
+      fbDB.ref('auth/'+login).set({
         email: email,
         passHash: hashPass(p1),
         updatedAt: new Date().toISOString()
-      });
-    }catch(e){ console.warn('Firebase auth save failed:', e.message); }
-  }
+      }).catch(function(e){ console.warn('Firebase auth save:', e.message); });
+    } else {
+      // Firebase ainda não inicializado — inicializar agora e salvar
+      try{
+        initFirebase();
+        if(fbDB){
+          fbDB.ref('auth/'+login).set({
+            email: email,
+            passHash: hashPass(p1),
+            updatedAt: new Date().toISOString()
+          }).catch(function(e){ console.warn('Firebase auth save:', e.message); });
+        }
+      }catch(e){ console.warn('Firebase init failed:', e.message); }
+    }
 
-  // Salvar e-mail no perfil também
-  await saveProfileData({email: email});
-  completeLogin(login);
+    // 3. Concluir login imediatamente (não aguarda Firebase)
+    completeLogin(login);
+
+  }catch(e){
+    err.textContent='Erro ao salvar: '+e.message;
+    if(btn){ btn.textContent='Salvar e entrar'; btn.disabled=false; }
+  }
 }
 
 /* Esqueci minha senha: enviar código por e-mail */
