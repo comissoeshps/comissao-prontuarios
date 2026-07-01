@@ -767,6 +767,8 @@ const USUARIOS={
   "telmabdsr":"Telma Batista dos Santos Raze"
 };
 const SENHA_GLOBAL='comissaohps';
+const ADMINS=['gabrielcm']; // logins com permissão de editar prontuários já auditados
+function isAdmin(){ return currentUser && ADMINS.indexOf(currentUser.login) >= 0; }
 
 /* === EMAILJS CONFIG === */
 const EJS_SERVICE   = 'service_rru71xs';
@@ -2136,7 +2138,7 @@ function allMultiKeys(){
 }
 
 function setVal(key,val){
-  if(lockedItemNums.has(Number(key)))return;
+  if(lockedItemNums.has(Number(key)) && !isAdmin())return;
   current[key]=val;renderForm();renderMultiForm()
 }
 
@@ -2179,7 +2181,7 @@ function clearForm(){
 }
 
 function save(){
-  if(blockedSubmit){
+  if(blockedSubmit && !isAdmin()){
     alert('Este atendimento ja foi auditado completamente. Informe outro numero de atendimento.');
     return;
   }
@@ -2194,16 +2196,29 @@ function save(){
     return validAnswers.indexOf(current[i.num])<0 && !lockedItemNums.has(i.num);
   });
 
+  // Verificar também itens da equipe multiprofissional
+  // A equipe multi é obrigatória somente se a presença foi marcada como 'sim'
+  // Mas a pergunta de presença em si deve ser respondida
+  var multiKeys=allMultiKeys();
+  // Pegar apenas as chaves de PRESENÇA de cada equipe (obrigatórias)
+  var presencaKeys=EQUIPES.map(function(eq){ return eq.keyPresenca; });
+  var pendingMulti=presencaKeys.filter(function(k){
+    return validAnswers.indexOf(current[k])<0 && !lockedItemNums.has(k);
+  });
+
   if(answeredItems.length===0 && lockedItemNums.size===0){
     alert('Marque pelo menos um item auditado.');
     return;
   }
 
-  if(pendingItems.length>0){
+  if(pendingItems.length>0 || pendingMulti.length>0){
     var listLines=pendingItems.map(function(i){
       return '- Item '+i.num+': '+i.text.substring(0,60)+(i.text.length>60?'...':'');
     }).join('\n');
-    var msg='ATENCAO: '+pendingItems.length+' item(ns) nao respondido(s):\n\n'
+    var multiLabels={'fisio_presenca':'Fisioterapia - presenca','nutri_presenca':'Nutricao - presenca','fono_presenca':'Fonoaudiologia - presenca','farma_presenca':'Farmacia - presenca'};
+    var multiLines=pendingMulti.map(function(k){ return '- Equipe: '+(multiLabels[k]||k); }).join('\n');
+    var allPending=pendingItems.length+pendingMulti.length;
+    var msg='ATENCAO: '+allPending+' item(ns) nao respondido(s):\n\n'
       +listLines
       +'\n\nSe salvar agora, o prontuario ficara como PARCIALMENTE AUDITADO.'
       +'\nVoce podera completa-lo depois com o mesmo numero de atendimento.'
@@ -2355,13 +2370,24 @@ async function checkAttendance(){
     const validAnswers=['sim','nao','na'];
     const answeredNums=ITEMS.filter(i=>validAnswers.includes(rec.answers[i.num])).map(i=>i.num);
     const missingNums=ITEMS.filter(i=>!validAnswers.includes(rec.answers[i.num])).map(i=>i.num);
-    console.debug('[checkAttendance] Total ITEMS:',ITEMS.length,'| Respondidos:',answeredNums.length,'| Faltando:',missingNums.length,'| Missing:',missingNums);
 
-    if(!missingNums.length){
+    // Verificar também equipes multiprofissionais (apenas presença — obrigatória)
+    const presencaKeysList=EQUIPES.map(eq=>eq.keyPresenca);
+    const answeredMultiKeys=presencaKeysList.filter(k=>validAnswers.includes(rec.answers[k]));
+    const missingMultiKeys=presencaKeysList.filter(k=>!validAnswers.includes(rec.answers[k]));
+
+    // Considera completo SOMENTE se todos os itens online E todas as presenças multi estão respondidas
+    if(!missingNums.length && !missingMultiKeys.length){
       // Auditoria completa — bloquear
       blockedSubmit=true;
-      lockedItemNums=new Set(ITEMS.map(i=>i.num));
-      // Carregar todas as respostas para exibição visual
+      // Admin pode editar mesmo prontuário completo — não bloqueia itens
+      if(isAdmin()){
+        lockedItemNums=new Set(); // nenhum item bloqueado para admin
+        blockedSubmit=false;      // admin pode salvar normalmente
+      } else {
+        lockedItemNums=new Set(ITEMS.map(i=>i.num));
+      }
+      // Carregar todas as respostas
       ITEMS.forEach(i=>{ if(rec.answers[i.num]) current[i.num]=rec.answers[i.num]; });
       // Aplicar tipo de prontuário
       const cTipo=(rec.tipoProntuario||'online').toLowerCase();
@@ -2381,10 +2407,17 @@ async function checkAttendance(){
           }
         },100);
       }
-      box.innerHTML=`<div class="alert-box alert-blocked"><span class="ic">⛔</span><div>
-        <b>Este prontuário já foi auditado completamente</b> — todos os ${ITEMS.length} itens respondidos${rec.auditor?', por '+rec.auditor:''}${rec.date?' em '+rec.date:''}.
-        <br>As respostas registradas estão exibidas abaixo apenas para consulta. Informe outro número para iniciar uma nova auditoria.
-      </div></div>`;
+      if(isAdmin()){
+        box.innerHTML=`<div class="alert-box" style="background:#EAF2FF;border:1px solid #90BBF5;color:#1a4a8a"><span class="ic">🔓</span><div>
+          <b>Modo administrador</b> — prontuário já auditado completamente por ${rec.auditor||'auditor'}${rec.date?' em '+rec.date:''}.
+          <br>Você pode editar e salvar novamente as respostas.
+        </div></div>`;
+      } else {
+        box.innerHTML=`<div class="alert-box alert-blocked"><span class="ic">⛔</span><div>
+          <b>Este prontuário já foi auditado completamente</b> — todos os ${ITEMS.length} itens respondidos${rec.auditor?', por '+rec.auditor:''}${rec.date?' em '+rec.date:''}.
+          <br>As respostas estão exibidas abaixo apenas para consulta. Informe outro número para iniciar uma nova auditoria.
+        </div></div>`;
+      }
       // Preencher campos de identificação com dados do prontuário existente
       if(rec.date)$('auditDate').value=rec.date;
       if(rec.sector){const s=$('sector');if(s)s.value=rec.sector;}
@@ -2398,16 +2431,22 @@ async function checkAttendance(){
     // Auditoria parcial — liberar apenas os itens faltantes
     existingRecordId=row.id||null;
     lockedItemNums=new Set(answeredNums);
+    // Bloquear também as chaves multi já respondidas
+    answeredMultiKeys.forEach(k=>lockedItemNums.add(k));
     // Identificar os itens faltantes com seus textos (primeiras palavras)
     const missingDetails=missingNums.map(n=>{
       const it=ITEMS.find(i=>i.num===n);
       return it?'Item '+n+': '+it.text.substring(0,40)+'…':'Item '+n;
     });
+    const multiLbl={'fisio_presenca':'Fisioterapia — presença','nutri_presenca':'Nutrição — presença','fono_presenca':'Fonoaudiologia — presença','farma_presenca':'Farmácia — presença'};
+    const missingMultiDetails=missingMultiKeys.map(k=>multiLbl[k]||k);
+    const allMissingDetails=[...missingDetails,...missingMultiDetails];
+    const totalMissing=missingNums.length+missingMultiKeys.length;
     box.innerHTML=`<div class="alert-box alert-partial"><span class="ic">⚠️</span><div>
-      <b>Este prontuário foi auditado parcialmente</b> — ${answeredNums.length} de ${ITEMS.length} itens já respondidos${rec.auditor?', por '+rec.auditor:''}.
+      <b>Este prontuário foi auditado parcialmente</b> — ${answeredNums.length} de ${ITEMS.length} itens respondidos${rec.auditor?', por '+rec.auditor:''}.
       <br><br>
-      <b>${missingNums.length} item(ns) pendente(s):</b>
-      <ul style="margin:6px 0 0 16px;font-size:12px;line-height:1.7">${missingDetails.map(d=>'<li>'+d+'</li>').join('')}</ul>
+      <b>${totalMissing} item(ns) pendente(s):</b>
+      <ul style="margin:6px 0 0 16px;font-size:12px;line-height:1.7">${allMissingDetails.map(d=>'<li>'+d+'</li>').join('')}</ul>
       <br>Os itens já registrados estão bloqueados (marcados com ✔). Complete apenas os pendentes.
     </div></div>`;
 
