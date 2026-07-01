@@ -170,6 +170,12 @@ function toggleTheme(){
   applyTheme(isDark?'light':'dark');
 }
 (function(){
+  // Limpar dados obsoletos do localStorage ao carregar
+  Object.keys(localStorage).forEach(function(k){
+    if(k.startsWith('hps_pass_')||k.startsWith('hps_email_')){
+      localStorage.removeItem(k);
+    }
+  });
   const saved=localStorage.getItem('hps_theme');
   const prefersDark=window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
   applyTheme(saved || (prefersDark?'dark':'light'));
