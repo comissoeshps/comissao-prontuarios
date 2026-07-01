@@ -322,7 +322,39 @@ function rowToRecord(row){
   });
   return{
     id:row.id||Date.now(),
-    date:row.data_auditoria||'',
+    date:(function(){
+      var raw=row.data_auditoria;
+      if(!raw) return '';
+      var s=String(raw).trim();
+      // Já está no formato dd/mm/yyyy ou dd/mm/yyyy hh:mm
+      if(/^\d{2}\/\d{2}\/\d{4}/.test(s)) return s;
+      // Formato yyyy-mm-dd hh:mm (novo formato com horário)
+      if(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(s)){
+        var parts=s.split(' ');
+        var dp=parts[0].split('-');
+        return dp[2]+'/'+dp[1]+'/'+dp[0]+(parts[1]?' '+parts[1]:'');
+      }
+      // Formato yyyy-mm-dd sem horário
+      if(/^\d{4}-\d{2}-\d{2}/.test(s)){
+        var p=s.substring(0,10).split('-');
+        return p[2]+'/'+p[1]+'/'+p[0];
+      }
+      // Número serial do Excel
+      if(/^\d+(\.\d+)?$/.test(s)){
+        var serial=parseFloat(s);
+        var d=new Date((serial-25569)*86400*1000);
+        var dd=String(d.getUTCDate()).padStart(2,'0');
+        var mm=String(d.getUTCMonth()+1).padStart(2,'0');
+        var yyyy=d.getUTCFullYear();
+        return dd+'/'+mm+'/'+yyyy;
+      }
+      // ISO string com T
+      if(s.indexOf('T')>0){
+        var iso=s.substring(0,10).split('-');
+        if(iso.length===3) return iso[2]+'/'+iso[1]+'/'+iso[0];
+      }
+      return s;
+    })(),
     attendance:row.numero_atendimento||'',
     sector:row.setor_auditado||'',
     tipoInt:row.tipo_internacao||'',
@@ -411,8 +443,13 @@ function equipeStats(arr, eq){
 function itemStats(arr){
   return ITEMS.map(i=>{
     let sim=0,nao=0,na=0;
-    arr.forEach(r=>{const v=r.answers[i.num];if(v==='sim')sim++;else if(v==='nao')nao++;else if(v==='na')na++;});
-    const app=sim+nao;
+    arr.forEach(r=>{
+      const v=r.answers[i.num];
+      if(v==='sim') sim++;
+      else if(v==='nao') nao++;
+      else if(v==='na') na++; // contado separadamente mas NÃO entra no denominador
+    });
+    const app=sim+nao; // denominador: apenas sim+nao, sem na
     return{...i,sim,nao,na,app,pct:app?Math.round(sim/app*100):0};
   });
 }
@@ -420,9 +457,14 @@ function itemStats(arr){
 function domainStats(arr){
   return [...new Set(ITEMS.map(i=>i.domain))].map(d=>{
     const its=ITEMS.filter(i=>i.domain===d);
-    let sim=0,app=0;
-    arr.forEach(r=>its.forEach(i=>{const v=r.answers[i.num];if(v==='sim'){sim++;app++}else if(v==='nao')app++;}));
-    return{domain:d,pct:app?Math.round(sim/app*100):0,count:its.length,color:DOMAIN_MAP[d]};
+    let sim=0,nao=0,app=0;
+    arr.forEach(r=>its.forEach(i=>{
+      const v=r.answers[i.num];
+      if(v==='sim'){sim++;app++;}
+      else if(v==='nao'){nao++;app++;}
+      // na: ignorado — não entra em app
+    }));
+    return{domain:d,sim,nao,pct:app?Math.round(sim/app*100):0,count:its.length,color:DOMAIN_MAP[d]};
   });
 }
 
@@ -449,9 +491,9 @@ function scoreFisico(arr){
     if(!r.fisAnswers) return;
     ITEMS_FISICO.forEach(i=>{
       const v=r.fisAnswers[i.num];
-      if(v==='sim'){sim++;app++;}
-      else if(v==='nao'){nao++;app++;}
-      else if(v==='na') na++;
+      if(v==='sim'){sim++;app++;}      // entra no numerador e denominador
+      else if(v==='nao'){nao++;app++;} // entra só no denominador
+      else if(v==='na') na++;          // N/A: excluído da conformidade
     });
   });
   return{sim,nao,na,app,pct:app?Math.round(sim/app*100):0};
@@ -464,9 +506,9 @@ function scoreFisico(arr){
     if(!r.fisAnswers) return;
     ITEMS_FISICO.forEach(i=>{
       const v=r.fisAnswers[i.num];
-      if(v==='sim'){sim++;app++;}
-      else if(v==='nao'){nao++;app++;}
-      else if(v==='na') na++;
+      if(v==='sim'){sim++;app++;}      // entra no numerador e denominador
+      else if(v==='nao'){nao++;app++;} // entra só no denominador
+      else if(v==='na') na++;          // N/A: excluído da conformidade
     });
   });
   return{sim,nao,na,app,pct:app?Math.round(sim/app*100):0};
@@ -520,9 +562,11 @@ function dashApply(){
   const scores=arr.map(score);
   const total=arr.length;
   const tSim=scores.reduce((a,b)=>a+b.sim,0),tNao=scores.reduce((a,b)=>a+b.nao,0),tNa=scores.reduce((a,b)=>a+b.na,0);
-  // Média de conformidade: ignora prontuários onde todos itens são N/A (app=0)
-  const scoresComApp=scores.filter(s=>s.app>0);
-  const avg=scoresComApp.length ? Math.round(scoresComApp.reduce((a,b)=>a+b.pct,0)/scoresComApp.length) : 0;
+  // Conformidade geral: soma ponderada (totalSim / totalApp) — N/A excluído do app
+  const totalSimGeral=scores.reduce((a,b)=>a+b.sim,0);
+  const totalAppGeral=scores.reduce((a,b)=>a+b.app,0);
+  const avg=totalAppGeral ? Math.round(totalSimGeral/totalAppGeral*100) : 0;
+  const scoresComApp=scores.filter(s=>s.app>0); // para outros cálculos
   const critN=scores.filter(s=>s.nao>0).length;
   const excelentes=scores.filter(s=>s.pct>=90).length;
   const avgColor=avg>=90?'var(--green)':avg>=75?'var(--amber)':'var(--red)';
@@ -534,13 +578,22 @@ function dashApply(){
   const worst=stats.filter(x=>x.app>0).sort((a,b)=>a.pct-b.pct||b.nao-a.nao);
   const domStats=domainStats(arr);
   const bySector=Object.entries(arr.reduce((m,r)=>{(m[r.sector]??=[]).push(r);return m},{}))
-    .map(([k,v])=>({k,n:v.length,score:Math.round(v.map(score).reduce((a,b)=>a+b.pct,0)/v.length)}))
+    .map(([k,v])=>{
+      // Soma ponderada: totalSim/totalApp — exclui N/A do denominador
+      const tSim=v.reduce((a,r)=>a+score(r).sim,0);
+      const tApp=v.reduce((a,r)=>a+score(r).app,0);
+      return{k,n:v.length,score:tApp?Math.round(tSim/tApp*100):0};
+    })
     .sort((a,b)=>a.score-b.score);
   const byMonth=Object.entries(arr.reduce((m,r)=>{const mo=r.date.slice(0,7);(m[mo]??=[]).push(r);return m},{}))
     .sort(([a],[b])=>a.localeCompare(b))
     .map(([mo,v])=>({mo,pct:Math.round(v.map(score).reduce((a,b)=>a+b.pct,0)/v.length)}));
   const byAuditor=Object.entries(arr.reduce((m,r)=>{const a=r.auditor||'';(m[a]??=[]).push(r);return m},{}))
-    .map(([k,v])=>({k,n:v.length,score:Math.round(v.map(score).reduce((a,b)=>a+b.pct,0)/v.length)}))
+    .map(([k,v])=>{
+      const tSim=v.reduce((a,r)=>a+score(r).sim,0);
+      const tApp=v.reduce((a,r)=>a+score(r).app,0);
+      return{k,n:v.length,score:tApp?Math.round(tSim/tApp*100):0};
+    })
     .sort((a,b)=>b.n-a.n);
 
   c.innerHTML=`
@@ -592,22 +645,13 @@ function dashApply(){
     ${arr.map(r=>{
       const s=score(r);
       // Formatar data em horário de Brasília
-      let dateStr=r.date||'';
-      if(dateStr && dateStr.length>=10){
-        try{
-          // Parsear manualmente para evitar problemas de timezone
-          const parts=dateStr.substring(0,10).split('-');
-          if(parts.length===3){
-            dateStr=parts[2]+'/'+parts[1]+'/'+parts[0]; // dd/mm/yyyy
-          }
-        }catch(e){}
-      }
+      const dateStr=r.date||'';
       // Badge de tipo de prontuário
       const tp=(r.tipoProntuario||'online').toLowerCase();
       const tpColor=tp==='fisico'?'var(--orange)':tp==='ambos'?'var(--purple)':'var(--blue)';
       const tpLabel=tp==='fisico'?'Físico':tp==='ambos'?'Ambos':'Online';
       return`<tr>
-      <td style="white-space:nowrap">${dateStr}</td>
+      <td style="white-space:nowrap;font-size:12px">${dateStr}</td>
       <td><b style="font-family:'DM Mono',monospace">${r.attendance}</b></td>
       <td>${r.sector}</td>
       <td style="font-size:11px;color:var(--muted)">${r.tipoInt||''}</td>
