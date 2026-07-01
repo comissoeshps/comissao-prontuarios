@@ -647,6 +647,7 @@ tr:hover td{background:#FAFCFF}
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+<script src="https://www.google.com/recaptcha/api.js?render=6Lf3GUAtAAAAF2Cvs_LkZKIF0MK9zs9sFTtYDqf" async defer></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script>
@@ -767,6 +768,7 @@ const USUARIOS={
   "telmabdsr":"Telma Batista dos Santos Raze"
 };
 const SENHA_GLOBAL='comissaohps';
+const RECAPTCHA_SITE_KEY='6Lf3GUAtAAAAF2Cvs_LkZKIF0MK9zs9sFTtYDqf';
 const ADMINS=['gabrielcm']; // logins com permissão de editar prontuários já auditados
 function isAdmin(){ return currentUser && ADMINS.indexOf(currentUser.login) >= 0; }
 
@@ -783,6 +785,39 @@ let currentFisico={},pendingFiles=[];
 let mediaRecorder=null,audioChunks=[],isRecording=false;
 
 /* === CONTROLE DE VERSÃO / CACHE BUSTER === */
+/* === RATE LIMITING DE LOGIN === */
+const LOGIN_ATTEMPTS_KEY='hps_login_attempts';
+const LOGIN_BLOCK_KEY='hps_login_blocked_until';
+const MAX_ATTEMPTS=5;
+const BLOCK_MINUTES=15;
+
+function checkLoginBlocked(){
+  const blockedUntil=parseInt(sessionStorage.getItem(LOGIN_BLOCK_KEY)||'0');
+  if(Date.now()<blockedUntil){
+    const remaining=Math.ceil((blockedUntil-Date.now())/60000);
+    return 'Muitas tentativas incorretas. Tente novamente em '+remaining+' minuto(s).';
+  }
+  return null;
+}
+
+function registerFailedAttempt(){
+  const attempts=parseInt(sessionStorage.getItem(LOGIN_ATTEMPTS_KEY)||'0')+1;
+  sessionStorage.setItem(LOGIN_ATTEMPTS_KEY, attempts);
+  if(attempts>=MAX_ATTEMPTS){
+    const until=Date.now()+BLOCK_MINUTES*60*1000;
+    sessionStorage.setItem(LOGIN_BLOCK_KEY, until);
+    sessionStorage.setItem(LOGIN_ATTEMPTS_KEY, '0');
+    return 'Conta bloqueada por '+BLOCK_MINUTES+' minutos após '+MAX_ATTEMPTS+' tentativas incorretas.';
+  }
+  const remaining=MAX_ATTEMPTS-attempts;
+  return null; // sem mensagem extra até chegar no limite
+}
+
+function clearLoginAttempts(){
+  sessionStorage.removeItem(LOGIN_ATTEMPTS_KEY);
+  sessionStorage.removeItem(LOGIN_BLOCK_KEY);
+}
+
 (function(){
   var CURRENT_VERSION = '2.1.0';
   var storedVersion = localStorage.getItem('hps_app_version');
@@ -876,11 +911,48 @@ async function tryLogin(){
   const btn=document.querySelector('#loginScreen .login-btn');
   err.textContent='';
 
-  if(!USUARIOS[user]){ err.textContent='Usuário não encontrado.'; return; }
+  // Verificar bloqueio por tentativas
+  const blockMsg=checkLoginBlocked();
+  if(blockMsg){ err.textContent=blockMsg; return; }
+
+  if(!USUARIOS[user]){
+    const msg=registerFailedAttempt();
+    err.textContent=msg||'Usuário ou senha incorretos.';
+    return;
+  }
 
   if(btn){ btn.textContent='Verificando…'; btn.disabled=true; }
 
   try{
+    // Obter token do reCAPTCHA v3 antes de qualquer verificação
+    let recaptchaToken=null;
+    try{
+      if(typeof grecaptcha!=='undefined'){
+        recaptchaToken=await new Promise((res,rej)=>{
+          grecaptcha.ready(()=>{
+            grecaptcha.execute(RECAPTCHA_SITE_KEY,{action:'login'})
+              .then(res).catch(rej);
+          });
+        });
+      }
+    }catch(e){ console.warn('reCAPTCHA indisponível:', e.message); }
+
+    // Verificar token no Apps Script (que tem a secret key)
+    if(recaptchaToken && SHEETS_WEBAPP_URL && SHEETS_WEBAPP_URL!=='COLE_AQUI_A_URL_DO_SEU_APPS_SCRIPT'){
+      try{
+        const captchaResp=await fetch(SHEETS_WEBAPP_URL+'?action=verifyCaptcha',{
+          method:'POST',
+          headers:{'Content-Type':'text/plain;charset=utf-8'},
+          body:JSON.stringify({action:'verifyCaptcha', token:recaptchaToken})
+        });
+        const captchaJson=await captchaResp.json();
+        if(captchaJson.status==='bot'){
+          err.textContent='Acesso negado. Por favor, tente novamente.';
+          return;
+        }
+      }catch(e){ console.warn('Verificação reCAPTCHA falhou (continuando):', e.message); }
+    }
+
     // Sempre consultar o Firebase como fonte de verdade
     initFirebase();
     let firebaseHash=null;
@@ -895,7 +967,7 @@ async function tryLogin(){
     // Se tem hash no Firebase → verificar contra ele (ignora localStorage)
     if(firebaseHash){
       if(hashPass(pass)!==firebaseHash){
-        err.textContent='Senha incorreta.';
+        err.textContent='Usuário ou senha incorretos.';
         return;
       }
       // Atualizar localStorage com dado do Firebase (sincronizar)
@@ -907,7 +979,8 @@ async function tryLogin(){
     // Sem hash no Firebase → primeiro acesso
     // Aceitar senha global para confirmar identidade
     if(pass!==SENHA_GLOBAL){
-      err.textContent='Senha incorreta.';
+      const blockMsg2=registerFailedAttempt();
+      err.textContent=blockMsg2||'Usuário ou senha incorretos.';
       return;
     }
     // Ir para tela de primeiro acesso
@@ -926,6 +999,7 @@ async function tryLogin(){
 function tryLoginKey(e){ if(e.key==='Enter') tryLogin(); }
 
 function completeLogin(user){
+  clearLoginAttempts(); // resetar contador de tentativas
   currentUser={login:user, name:USUARIOS[user]};
   sessionStorage.setItem('hps_user', JSON.stringify(currentUser));
   $('loginPanel').style.display='none';
@@ -1021,7 +1095,15 @@ async function sendResetCode(){
   const err=document.getElementById('forgotErr');
   err.textContent='';
 
-  if(!USUARIOS[user]){ err.textContent='Usuário não encontrado.'; return; }
+  // Verificar bloqueio por tentativas
+  const blockMsg=checkLoginBlocked();
+  if(blockMsg){ err.textContent=blockMsg; return; }
+
+  if(!USUARIOS[user]){
+    const msg=registerFailedAttempt();
+    err.textContent=msg||'Usuário ou senha incorretos.';
+    return;
+  }
 
   // Buscar e-mail do usuário
   let email=sessionStorage.getItem('hps_email_'+user)||localStorage.getItem('hps_email_'+user);
