@@ -568,8 +568,8 @@ tr:hover td{background:#FAFCFF}
       <div class="section-label" style="margin-top:14px">Contexto do prontuário</div>
       <div class="meta meta-3">
         <div class="field"><label>Nome do auditor</label><input id="auditor" type="text" list="auditorList" autocomplete="off" readonly style="background:var(--soft);color:var(--muted);cursor:not-allowed"></div>
-        <div class="field"><label>Dias de internação</label><input id="diasIntern" type="number" min="0" placeholder="Ex.: 5"></div>
-        <div class="field"><label>Desfecho</label><select id="desfecho"><option value="">Selecione</option><option>Alta hospitalar</option><option>Transferência interna</option><option>Transferência externa</option><option>Óbito</option><option>Evasão</option><option>Em internação (auditoria parcial)</option></select></div>
+        <div class="field" id="diasInternField"><label>Dias de internação</label><input id="diasIntern" type="number" min="0" placeholder="Ex.: 5"></div>
+        <div class="field"><label>Desfecho</label><select id="desfecho" onchange="onDesfechoChange(this.value)"><option value="">Selecione</option><option>Alta hospitalar</option><option>Transferência interna</option><option>Transferência externa</option><option>Óbito</option><option>Evasão</option><option>Em internação (auditoria parcial)</option></select></div>
       </div>
       <div id="attendanceStatus" style="display:none;margin-top:14px"></div>
     </div>
@@ -2116,6 +2116,32 @@ function setTipoProntuario(tipo){
   if(panelFisico) panelFisico.style.display=(tipo==='online')?'none':'block';
 }
 
+function onDesfechoChange(val){
+  const field=document.getElementById('diasInternField');
+  const input=document.getElementById('diasIntern');
+  const label=field ? field.querySelector('label') : null;
+  if(val==='Alta hospitalar'){
+    // Alta hospitalar = não é internação → dias não se aplica
+    if(input){
+      input.value='';
+      input.disabled=true;
+      input.placeholder='Não se aplica';
+      input.style.background='var(--soft)';
+      input.style.color='var(--muted)';
+    }
+    if(label) label.textContent='Dias de internação (N/A)';
+  } else {
+    // Outros desfechos → liberar o campo
+    if(input){
+      input.disabled=false;
+      input.placeholder='Ex.: 5';
+      input.style.background='';
+      input.style.color='';
+    }
+    if(label) label.textContent='Dias de internação';
+  }
+}
+
 function requestColeta(btn){
   show('coleta', btn);
   if(currentUser){
@@ -2157,6 +2183,7 @@ function clearForm(){
     dateEl.value=yyyy+'-'+mm+'-'+dd;
   }
   ['sector','tipoInt','desfecho'].forEach(id=>{const el=$(id);if(el)el.value=''});
+  onDesfechoChange(''); // resetar campo dias de internação
   // Restaurar nome do auditor logado
   const auditorEl=$('auditor');
   if(auditorEl && currentUser){
@@ -2423,7 +2450,7 @@ async function checkAttendance(){
       if(rec.sector){const s=$('sector');if(s)s.value=rec.sector;}
       if(rec.tipoInt){const t=$('tipoInt');if(t)t.value=rec.tipoInt;}
       if(rec.diasIntern){const d=$('diasIntern');if(d)d.value=rec.diasIntern;}
-      if(rec.desfecho){const dv=$('desfecho');if(dv)dv.value=rec.desfecho;}
+      if(rec.desfecho){const dv=$('desfecho');if(dv){dv.value=rec.desfecho;onDesfechoChange(rec.desfecho);}}
       renderForm();
       return;
     }
