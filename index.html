@@ -2180,40 +2180,74 @@ function clearForm(){
 
 function save(){
   if(blockedSubmit){
-    alert('Este atendimento já foi auditado completamente. Informe outro número de atendimento para prosseguir.');
+    alert('Este atendimento ja foi auditado completamente. Informe outro numero de atendimento.');
     return;
   }
   if(!$('auditDate').value||!$('attendance').value.trim()||!$('sector').value){
-    alert('Preencha data, número de atendimento e setor.');return;
+    alert('Preencha data, numero de atendimento e setor.');
+    return;
   }
-  const answered=ITEMS.filter(i=>current[i.num]).length;
-  if(!answered){alert('Marque pelo menos um item auditado.');return;}
-  const record={
-    id:existingRecordId||Date.now(),date:$('auditDate').value,attendance:$('attendance').value.trim(),
-    sector:$('sector').value,tipoInt:$('tipoInt').value,auditor:$('auditor').value.trim(),
-    diasIntern:$('diasIntern').value,desfecho:$('desfecho').value,
+
+  var validAnswers=['sim','nao','na'];
+  var answeredItems=ITEMS.filter(function(i){ return validAnswers.indexOf(current[i.num])>=0; });
+  var pendingItems=ITEMS.filter(function(i){
+    return validAnswers.indexOf(current[i.num])<0 && !lockedItemNums.has(i.num);
+  });
+
+  if(answeredItems.length===0 && lockedItemNums.size===0){
+    alert('Marque pelo menos um item auditado.');
+    return;
+  }
+
+  if(pendingItems.length>0){
+    var listLines=pendingItems.map(function(i){
+      return '- Item '+i.num+': '+i.text.substring(0,60)+(i.text.length>60?'...':'');
+    }).join('\n');
+    var msg='ATENCAO: '+pendingItems.length+' item(ns) nao respondido(s):\n\n'
+      +listLines
+      +'\n\nSe salvar agora, o prontuario ficara como PARCIALMENTE AUDITADO.'
+      +'\nVoce podera completa-lo depois com o mesmo numero de atendimento.'
+      +'\n\nDeseja salvar assim mesmo?';
+    if(!confirm(msg)) return;
+  }
+
+  var record={
+    id:existingRecordId||Date.now(),
+    date:$('auditDate').value,
+    attendance:$('attendance').value.trim(),
+    sector:$('sector').value,
+    tipoInt:$('tipoInt').value,
+    auditor:$('auditor').value.trim(),
+    diasIntern:$('diasIntern').value,
+    desfecho:$('desfecho').value,
     tipo_prontuario:tipoProntuario||'online',
     observacoes:$('observacoes')?$('observacoes').value.trim():'',
-    answers:{...current},
-    fisAnswers:{...currentFisico}
+    answers:Object.assign({},current),
+    fisAnswers:Object.assign({},currentFisico)
   };
   data.push(record);
   persist();
   sendToSheets(record);
-  // Upload de arquivos para o Google Drive
+
   if(pendingFiles.length){
-    const statusEl=$('syncStatus');
-    if(statusEl) statusEl.textContent='Enviando '+pendingFiles.length+' arquivo(s) para o Drive…';
-    uploadFilesToDrive(record.attendance, record.auditor).then(results=>{
+    var statusEl=$('syncStatus');
+    if(statusEl) statusEl.textContent='Enviando '+pendingFiles.length+' arquivo(s) para o Drive...';
+    uploadFilesToDrive(record.attendance, record.auditor).then(function(results){
       if(statusEl) statusEl.textContent=results.length>0
-        ?'✅ '+results.length+' arquivo(s) enviado(s) ao Drive.'
-        :'⚠️ Auditoria salva, mas falha no envio dos arquivos.';
-      setTimeout(()=>{if(statusEl)statusEl.textContent='';},4000);
+        ? results.length+' arquivo(s) enviado(s) ao Drive.'
+        : 'Auditoria salva, mas falha no envio dos arquivos.';
+      setTimeout(function(){ if(statusEl) statusEl.textContent=''; },4000);
     });
   }
+
   clearForm();
   window.scrollTo({top:0,behavior:'smooth'});
-  alert('✅ Auditoria salva com sucesso'+(pendingFiles.length?' — arquivos sendo enviados ao Drive.':'.'));
+
+  if(pendingItems.length>0){
+    alert('Auditoria salva como PARCIALMENTE AUDITADA.\nVoce pode completa-la depois informando o mesmo numero de atendimento.');
+  } else {
+    alert('Auditoria salva com sucesso.');
+  }
 }
 
 /* ═══════════════════════════════════════════════ ENVIO PARA GOOGLE SHEETS */
@@ -2351,6 +2385,12 @@ async function checkAttendance(){
         <b>Este prontuário já foi auditado completamente</b> — todos os ${ITEMS.length} itens respondidos${rec.auditor?', por '+rec.auditor:''}${rec.date?' em '+rec.date:''}.
         <br>As respostas registradas estão exibidas abaixo apenas para consulta. Informe outro número para iniciar uma nova auditoria.
       </div></div>`;
+      // Preencher campos de identificação com dados do prontuário existente
+      if(rec.date)$('auditDate').value=rec.date;
+      if(rec.sector){const s=$('sector');if(s)s.value=rec.sector;}
+      if(rec.tipoInt){const t=$('tipoInt');if(t)t.value=rec.tipoInt;}
+      if(rec.diasIntern){const d=$('diasIntern');if(d)d.value=rec.diasIntern;}
+      if(rec.desfecho){const dv=$('desfecho');if(dv)dv.value=rec.desfecho;}
       renderForm();
       return;
     }
