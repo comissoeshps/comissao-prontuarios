@@ -2041,14 +2041,15 @@ function handleFiles(files){
   renderFileList();
 }
 
-async function uploadFilesToDrive(atendimento, auditor){
-  if(!pendingFiles.length) return [];
+async function uploadFilesToDrive(atendimento, auditor, files){
+  var filesToSend=files||pendingFiles;
+  if(!filesToSend.length) return [];
   if(!SHEETS_WEBAPP_URL||SHEETS_WEBAPP_URL==='COLE_AQUI_A_URL_DO_SEU_APPS_SCRIPT'){
     console.warn('SHEETS_WEBAPP_URL não configurada — arquivos não enviados ao Drive.');
     return [];
   }
   const results=[];
-  for(const f of pendingFiles){
+  for(const f of filesToSend){
     try{
       const b64=await new Promise((res,rej)=>{
         const r=new FileReader();
@@ -2381,19 +2382,25 @@ function save(){
   persist();
   sendToSheets(record);
 
-  if(pendingFiles.length){
+  // Guardar referência dos arquivos e dados ANTES do clearForm()
+  var filesToUpload=pendingFiles.slice();
+  var uploadAtt=record.attendance;
+  var uploadAud=record.auditor;
+
+  clearForm();
+  window.scrollTo({top:0,behavior:'smooth'});
+
+  if(filesToUpload.length){
     var statusEl=$('syncStatus');
-    if(statusEl) statusEl.textContent='Enviando '+pendingFiles.length+' arquivo(s) para o Drive...';
-    uploadFilesToDrive(record.attendance, record.auditor).then(function(results){
+    if(statusEl) statusEl.textContent='Enviando '+filesToUpload.length+' arquivo(s) para o Drive...';
+    // Passar os arquivos diretamente para evitar perda após clearForm
+    uploadFilesToDrive(uploadAtt, uploadAud, filesToUpload).then(function(results){
       if(statusEl) statusEl.textContent=results.length>0
         ? results.length+' arquivo(s) enviado(s) ao Drive.'
         : 'Auditoria salva, mas falha no envio dos arquivos.';
       setTimeout(function(){ if(statusEl) statusEl.textContent=''; },4000);
     });
   }
-
-  clearForm();
-  window.scrollTo({top:0,behavior:'smooth'});
 
   if(pendingItems.length>0){
     alert('Auditoria salva como PARCIALMENTE AUDITADA.\nVoce pode completa-la depois informando o mesmo numero de atendimento.');
