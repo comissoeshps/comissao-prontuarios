@@ -647,7 +647,6 @@ tr:hover td{background:#FAFCFF}
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
-<script src="https://www.google.com/recaptcha/api.js?render=6Lf3GUAtAAAAF2Cvs_LkZKIF0MK9zs9sFTtYDqf" async defer></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script>
@@ -768,7 +767,6 @@ const USUARIOS={
   "telmabdsr":"Telma Batista dos Santos Raze"
 };
 const SENHA_GLOBAL='comissaohps';
-const RECAPTCHA_SITE_KEY='6Lf3GUAtAAAAF2Cvs_LkZKIF0MK9zs9sFTtYDqf';
 const ADMINS=['gabrielcm']; // logins com permissão de editar prontuários já auditados
 function isAdmin(){ return currentUser && ADMINS.indexOf(currentUser.login) >= 0; }
 
@@ -924,41 +922,7 @@ async function tryLogin(){
   if(btn){ btn.textContent='Verificando…'; btn.disabled=true; }
 
   try{
-    // reCAPTCHA v3 — completamente silencioso
-    let recaptchaToken=null;
-    try{
-      if(typeof grecaptcha!=='undefined'){
-        recaptchaToken=await new Promise((res)=>{
-          try{
-            grecaptcha.ready(function(){
-              try{
-                grecaptcha.execute(RECAPTCHA_SITE_KEY,{action:'login'})
-                  .then(function(t){ res(t); })
-                  .catch(function(){ res(null); });
-              }catch(ex){ res(null); }
-            });
-          }catch(ex2){ res(null); }
-          // Timeout de 4s
-          setTimeout(function(){ res(null); }, 4000);
-        });
-      }
-    }catch(e){ res(null); }
-
-    // Verificar token se disponível (falha silenciosa)
-    if(recaptchaToken){
-      try{
-        const captchaResp=await fetch(SHEETS_WEBAPP_URL+'?action=verifyCaptcha',{
-          method:'POST',
-          headers:{'Content-Type':'text/plain;charset=utf-8'},
-          body:JSON.stringify({action:'verifyCaptcha', token:recaptchaToken})
-        });
-        const captchaJson=await captchaResp.json();
-        if(captchaJson.status==='bot'){
-          err.textContent='Acesso negado. Por favor, tente novamente.';
-          return;
-        }
-      }catch(e){ console.warn('Verificação reCAPTCHA (ignorada):', e.message); }
-    }
+    // reCAPTCHA desativado temporariamente
 
     // Sempre consultar o Firebase como fonte de verdade
     initFirebase();
