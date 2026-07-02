@@ -924,23 +924,25 @@ async function tryLogin(){
   if(btn){ btn.textContent='Verificando…'; btn.disabled=true; }
 
   try{
-    // reCAPTCHA v3 — falha silenciosa para não bloquear login
+    // reCAPTCHA v3 — completamente silencioso
     let recaptchaToken=null;
     try{
-      if(typeof grecaptcha!=='undefined' && grecaptcha.execute){
-        recaptchaToken=await Promise.race([
-          new Promise((res)=>{
-            try{
-              grecaptcha.ready(()=>{
+      if(typeof grecaptcha!=='undefined'){
+        recaptchaToken=await new Promise((res)=>{
+          try{
+            grecaptcha.ready(function(){
+              try{
                 grecaptcha.execute(RECAPTCHA_SITE_KEY,{action:'login'})
-                  .then(res).catch(()=>res(null));
-              });
-            }catch(ex){ res(null); }
-          }),
-          new Promise(res=>setTimeout(()=>res(null),4000))
-        ]);
+                  .then(function(t){ res(t); })
+                  .catch(function(){ res(null); });
+              }catch(ex){ res(null); }
+            });
+          }catch(ex2){ res(null); }
+          // Timeout de 4s
+          setTimeout(function(){ res(null); }, 4000);
+        });
       }
-    }catch(e){ console.warn('reCAPTCHA:', e.message); }
+    }catch(e){ res(null); }
 
     // Verificar token se disponível (falha silenciosa)
     if(recaptchaToken){
@@ -2043,20 +2045,24 @@ function handleFiles(files){
 
 async function uploadFilesToDrive(atendimento, auditor, files){
   var filesToSend=files||pendingFiles;
-  if(!filesToSend.length) return [];
+  console.log('[UPLOAD] Iniciando. Arquivos:', filesToSend.length, '| Atendimento:', atendimento);
+  if(!filesToSend.length){ console.warn('[UPLOAD] Nenhum arquivo.'); return []; }
   if(!SHEETS_WEBAPP_URL||SHEETS_WEBAPP_URL==='COLE_AQUI_A_URL_DO_SEU_APPS_SCRIPT'){
-    console.warn('SHEETS_WEBAPP_URL não configurada — arquivos não enviados ao Drive.');
+    console.error('[UPLOAD] SHEETS_WEBAPP_URL não configurada!');
     return [];
   }
+  console.log('[UPLOAD] URL do Apps Script:', SHEETS_WEBAPP_URL);
   const results=[];
   for(const f of filesToSend){
+    console.log('[UPLOAD] Enviando arquivo:', f.name, '| Tamanho:', f.size, 'bytes | Tipo:', f.type);
     try{
       const b64=await new Promise((res,rej)=>{
         const r=new FileReader();
-        r.onload=()=>res(r.result.split(',')[1]);
-        r.onerror=rej;
+        r.onload=()=>{ console.log('[UPLOAD] Arquivo lido em base64, tamanho b64:', r.result.length); res(r.result.split(',')[1]); };
+        r.onerror=(e)=>{ console.error('[UPLOAD] Erro ao ler arquivo:', e); rej(e); };
         r.readAsDataURL(f);
       });
+      console.log('[UPLOAD] Enviando para Apps Script...');
       const resp=await fetch(SHEETS_WEBAPP_URL+'?action=upload',{
         method:'POST',
         headers:{'Content-Type':'text/plain;charset=utf-8'},
@@ -2069,11 +2075,20 @@ async function uploadFilesToDrive(atendimento, auditor, files){
           auditor:auditor
         })
       });
+      console.log('[UPLOAD] Resposta HTTP status:', resp.status);
       const json=await resp.json();
-      if(json.status==='ok') results.push({name:f.name,url:json.url,fileId:json.fileId,thumb:json.thumbnailUrl});
-      else console.warn('Erro upload '+f.name+':', json.message);
-    }catch(err){ console.error('Erro ao enviar '+f.name+':', err); }
+      console.log('[UPLOAD] Resposta JSON:', JSON.stringify(json));
+      if(json.status==='ok'){
+        results.push({name:f.name,url:json.url,fileId:json.fileId,thumb:json.thumbnailUrl});
+        console.log('[UPLOAD] Sucesso! URL:', json.url);
+      } else {
+        console.error('[UPLOAD] Erro do servidor:', json.message);
+      }
+    }catch(err){
+      console.error('[UPLOAD] Exceção ao enviar '+f.name+':', err.message, err);
+    }
   }
+  console.log('[UPLOAD] Concluído. Resultados:', results.length);
   return results;
 }
 function handleDrop(e){e.preventDefault();document.getElementById('uploadArea').classList.remove('drag-over');handleFiles(e.dataTransfer.files);}
@@ -2386,6 +2401,7 @@ function save(){
   var filesToUpload=pendingFiles.slice();
   var uploadAtt=record.attendance;
   var uploadAud=record.auditor;
+  console.log('[SAVE] pendingFiles antes do clearForm:', pendingFiles.length, '| filesToUpload:', filesToUpload.length);
 
   clearForm();
   window.scrollTo({top:0,behavior:'smooth'});
