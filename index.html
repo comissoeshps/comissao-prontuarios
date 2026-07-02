@@ -647,6 +647,7 @@ tr:hover td{background:#FAFCFF}
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+<script src="https://www.google.com/recaptcha/api.js?render=6Lf3GUAtAAAAF2Cvs_LkZKIF0MK9zs9sFTtYDqf"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script>
@@ -767,6 +768,7 @@ const USUARIOS={
   "telmabdsr":"Telma Batista dos Santos Raze"
 };
 const SENHA_GLOBAL='comissaohps';
+const RECAPTCHA_SITE_KEY='6Lf3GUAtAAAAF2Cvs_LkZKIF0MK9zs9sFTtYDqf';
 const ADMINS=['gabrielcm']; // logins com permissão de editar prontuários já auditados
 function isAdmin(){ return currentUser && ADMINS.indexOf(currentUser.login) >= 0; }
 
@@ -923,6 +925,41 @@ async function tryLogin(){
 
   try{
     // reCAPTCHA desativado temporariamente
+
+    // reCAPTCHA v3 — invisível, completamente silencioso
+    let recaptchaToken=null;
+    try{
+      if(typeof grecaptcha!=='undefined'){
+        recaptchaToken=await new Promise(function(res){
+          try{
+            grecaptcha.ready(function(){
+              try{
+                grecaptcha.execute(RECAPTCHA_SITE_KEY,{action:'login'})
+                  .then(function(t){ res(t); })
+                  .catch(function(){ res(null); });
+              }catch(ex){ res(null); }
+            });
+          }catch(ex2){ res(null); }
+          setTimeout(function(){ res(null); }, 5000);
+        });
+      }
+    }catch(e){ console.warn('reCAPTCHA:', e.message); }
+
+    // Verificar token no Apps Script se disponível
+    if(recaptchaToken){
+      try{
+        const captchaResp=await fetch(SHEETS_WEBAPP_URL+'?action=verifyCaptcha',{
+          method:'POST',
+          headers:{'Content-Type':'text/plain;charset=utf-8'},
+          body:JSON.stringify({action:'verifyCaptcha', token:recaptchaToken})
+        });
+        const captchaJson=await captchaResp.json();
+        if(captchaJson.status==='bot'){
+          err.textContent='Acesso negado. Por favor, tente novamente em alguns instantes.';
+          return;
+        }
+      }catch(e){ console.warn('Verificação reCAPTCHA ignorada:', e.message); }
+    }
 
     // Sempre consultar o Firebase como fonte de verdade
     initFirebase();
@@ -1603,30 +1640,96 @@ async function loadMyAuditorias(){
     return;
   }
   try{
-    const res=await fetch(SHEETS_WEBAPP_URL+'?action=list');
-    const json=await res.json();
+    // Buscar auditorias e anexos em paralelo
+    const [resAud, resAnex] = await Promise.all([
+      fetch(SHEETS_WEBAPP_URL+'?action=list'),
+      fetch(SHEETS_WEBAPP_URL+'?action=listAnexos').catch(()=>null)
+    ]);
+    const json=await resAud.json();
     if(json.status!=='ok') return;
+
+    // Mapear anexos por número de atendimento (apenas do auditor atual)
+    let anexosByAtt={};
+    if(resAnex){
+      try{
+        const jsonAnex=await resAnex.json();
+        if(jsonAnex.status==='ok' && jsonAnex.rows){
+          jsonAnex.rows
+            .filter(a=>String(a.auditor||'').trim()===currentUser.name)
+            .forEach(a=>{
+              const att=String(a.numero_atendimento||'').trim();
+              if(!anexosByAtt[att]) anexosByAtt[att]=[];
+              anexosByAtt[att].push(a);
+            });
+        }
+      }catch(e){ console.warn('Erro ao carregar anexos:', e); }
+    }
+
     const myRecords=json.rows.filter(r=>String(r.auditor||'').trim()===currentUser.name);
     const total=myRecords.length;
     const now=new Date();
     const thisMonth=myRecords.filter(r=>{
-      const d=new Date(r.data_auditoria); return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();
+      const d=new Date(r.data_auditoria);
+      return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();
     }).length;
     const avgConf=total ? Math.round(myRecords.reduce((acc,r)=>acc+Number(r.conformidade_geral_pct||0),0)/total) : 0;
     $('statTotal').textContent=total;
     $('statMonth').textContent=thisMonth;
     $('statConf').textContent=total?avgConf+'%':'—';
+
     const list=$('myAttendances');
-    if(!myRecords.length){list.innerHTML='<div style="color:var(--muted);font-size:13px">Nenhuma auditoria registrada ainda.</div>';return;}
-    list.innerHTML=myRecords.sort((a,b)=>b.data_auditoria.localeCompare(a.data_auditoria))
-      .map(r=>`<div class="att-item">
-        <div><div class="att-num">${r.numero_atendimento||'—'}</div>
-        <div class="att-meta">${r.setor_auditado||'—'}</div></div>
-        <div style="text-align:right"><div style="font-size:11px;color:var(--muted)">${r.data_auditoria||''}</div>
-        <div style="font-size:12px;font-weight:700;color:${Number(r.conformidade_geral_pct||0)>=90?'var(--green)':Number(r.conformidade_geral_pct||0)>=75?'var(--amber)':'var(--red)'}">${r.conformidade_geral_pct||'—'}%</div></div>
-      </div>`).join('');
-  }catch(e){console.error('Erro ao carregar auditorias:',e);}
+    if(!myRecords.length){
+      list.innerHTML='<div style="color:var(--muted);font-size:13px">Nenhuma auditoria registrada ainda.</div>';
+      return;
+    }
+
+    list.innerHTML=myRecords
+      .sort((a,b)=>String(b.data_auditoria||'').localeCompare(String(a.data_auditoria||'')))
+      .map(function(r){
+        const att=String(r.numero_atendimento||'').trim();
+        const anexos=anexosByAtt[att]||[];
+        const pct=Number(r.conformidade_geral_pct||0);
+        const cor=pct>=90?'var(--green)':pct>=75?'var(--amber)':'var(--red)';
+
+        // Formatar data
+        let dataStr=r.data_auditoria||'';
+        if(dataStr && dataStr.length>=10){
+          const p=dataStr.substring(0,10).split('-');
+          if(p.length===3) dataStr=p[2]+'/'+p[1]+'/'+p[0]+(dataStr.length>10?' '+dataStr.substring(11,16):'');
+        }
+
+        // Renderizar anexos
+        let anexosHtml='';
+        if(anexos.length>0){
+          const itens=anexos.map(function(a){
+            const isImg=String(a.tipo||'').includes('image');
+            const icon=isImg && a.thumbnail_url
+            const iconHtml=isImg && a.thumbnail_url
+              ?'<img src="'+a.thumbnail_url+'" style="width:28px;height:28px;object-fit:cover;border-radius:4px">'
+              :'<span>'+(isImg?'IMG':'PDF')+'</span>';
+              +icon
+              +iconHtml
+              +'</a>';
+          }).join('');
+          anexosHtml='<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)">'
+            +'<div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px">📎 Anexos ('+anexos.length+')</div>'
+            +'<div style="display:flex;flex-wrap:wrap;gap:5px">'+itens+'</div>'
+            +'</div>';
+        }
+
+        return '<div class="att-item" style="flex-direction:column;align-items:stretch;gap:0">'
+          +'<div style="display:flex;justify-content:space-between;align-items:center">'
+          +'<div><div class="att-num">'+att+'</div><div class="att-meta">'+(r.setor_auditado||'—')+'</div></div>'
+          +'<div style="text-align:right"><div style="font-size:11px;color:var(--muted)">'+dataStr+'</div>'
+          +'<div style="font-size:12px;font-weight:700;color:'+cor+'">'+pct+'%</div></div>'
+          +'</div>'
+          +anexosHtml
+          +'</div>';
+      }).join('');
+
+  }catch(e){ console.error('Erro ao carregar auditorias:',e); }
 }
+
 
 /* ══ CHAT FLUTUANTE — FIREBASE ═══════════════════════════════════════════ */
 
