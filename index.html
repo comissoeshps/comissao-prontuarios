@@ -924,21 +924,26 @@ async function tryLogin(){
   if(btn){ btn.textContent='Verificando…'; btn.disabled=true; }
 
   try{
-    // Obter token do reCAPTCHA v3 antes de qualquer verificação
+    // reCAPTCHA v3 — falha silenciosa para não bloquear login
     let recaptchaToken=null;
     try{
-      if(typeof grecaptcha!=='undefined'){
-        recaptchaToken=await new Promise((res,rej)=>{
-          grecaptcha.ready(()=>{
-            grecaptcha.execute(RECAPTCHA_SITE_KEY,{action:'login'})
-              .then(res).catch(rej);
-          });
-        });
+      if(typeof grecaptcha!=='undefined' && grecaptcha.execute){
+        recaptchaToken=await Promise.race([
+          new Promise((res)=>{
+            try{
+              grecaptcha.ready(()=>{
+                grecaptcha.execute(RECAPTCHA_SITE_KEY,{action:'login'})
+                  .then(res).catch(()=>res(null));
+              });
+            }catch(ex){ res(null); }
+          }),
+          new Promise(res=>setTimeout(()=>res(null),4000))
+        ]);
       }
-    }catch(e){ console.warn('reCAPTCHA indisponível:', e.message); }
+    }catch(e){ console.warn('reCAPTCHA:', e.message); }
 
-    // Verificar token no Apps Script (que tem a secret key)
-    if(recaptchaToken && SHEETS_WEBAPP_URL && SHEETS_WEBAPP_URL!=='COLE_AQUI_A_URL_DO_SEU_APPS_SCRIPT'){
+    // Verificar token se disponível (falha silenciosa)
+    if(recaptchaToken){
       try{
         const captchaResp=await fetch(SHEETS_WEBAPP_URL+'?action=verifyCaptcha',{
           method:'POST',
@@ -950,7 +955,7 @@ async function tryLogin(){
           err.textContent='Acesso negado. Por favor, tente novamente.';
           return;
         }
-      }catch(e){ console.warn('Verificação reCAPTCHA falhou (continuando):', e.message); }
+      }catch(e){ console.warn('Verificação reCAPTCHA (ignorada):', e.message); }
     }
 
     // Sempre consultar o Firebase como fonte de verdade
@@ -959,9 +964,19 @@ async function tryLogin(){
 
     if(fbDB){
       try{
-        const snap=await fbDB.ref('auth/'+user+'/passHash').once('value');
-        if(snap.exists()) firebaseHash=snap.val();
-      }catch(e){ console.warn('Firebase lookup failed:', e.message); }
+        // Timeout de 8 segundos para não travar indefinidamente
+        const snap=await Promise.race([
+          fbDB.ref('auth/'+user+'/passHash').once('value'),
+          new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),8000))
+        ]);
+        if(snap && snap.exists()) firebaseHash=snap.val();
+      }catch(e){
+        console.warn('Firebase lookup:', e.message);
+        if(e.message==='timeout'){
+          err.textContent='Tempo esgotado. Verifique sua conexão e tente novamente.';
+          return;
+        }
+      }
     }
 
     // Se tem hash no Firebase → verificar contra ele (ignora localStorage)
