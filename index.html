@@ -2390,23 +2390,28 @@ function save(){
   clearForm();
   window.scrollTo({top:0,behavior:'smooth'});
 
+  // Mostrar mensagem de status ANTES do alert para não bloquear o upload
+  var statusEl=$('syncStatus');
+  var wasParcial=pendingItems.length>0||pendingMulti.length>0;
+
   if(filesToUpload.length){
-    var statusEl=$('syncStatus');
     if(statusEl) statusEl.textContent='Enviando '+filesToUpload.length+' arquivo(s) para o Drive...';
-    // Passar os arquivos diretamente para evitar perda após clearForm
     uploadFilesToDrive(uploadAtt, uploadAud, filesToUpload).then(function(results){
       if(statusEl) statusEl.textContent=results.length>0
         ? results.length+' arquivo(s) enviado(s) ao Drive.'
-        : 'Auditoria salva, mas falha no envio dos arquivos.';
-      setTimeout(function(){ if(statusEl) statusEl.textContent=''; },4000);
+        : 'Falha no envio dos arquivos. Tente novamente.';
+      setTimeout(function(){ if(statusEl) statusEl.textContent=''; },5000);
     });
   }
 
-  if(pendingItems.length>0){
-    alert('Auditoria salva como PARCIALMENTE AUDITADA.\nVoce pode completa-la depois informando o mesmo numero de atendimento.');
-  } else {
-    alert('Auditoria salva com sucesso.');
-  }
+  // Usar setTimeout para deixar o upload iniciar antes do alert bloquear
+  setTimeout(function(){
+    if(wasParcial){
+      alert('Auditoria salva como PARCIALMENTE AUDITADA.\nVoce pode completa-la depois informando o mesmo numero de atendimento.');
+    } else {
+      alert('Auditoria salva com sucesso.');
+    }
+  }, 100);
 }
 
 /* ═══════════════════════════════════════════════ ENVIO PARA GOOGLE SHEETS */
