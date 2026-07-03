@@ -513,7 +513,7 @@ tr:hover td{background:#FAFCFF}
     <!-- TELA 3: Esqueci minha senha — digitar login para receber código -->
     <div id="forgotScreen" style="display:none">
       <div class="login-field"><label>Seu usuário de login</label><input id="forgotUser" type="text" placeholder="Ex.: gabrielcm"></div>
-      <button class="login-btn" onclick="sendResetCode()">Enviar código por e-mail</button>
+      <button class="login-btn" onclick="sendResetCode()">Enviar e-mail de redefinição</button>
       <div id="forgotErr" class="login-error"></div>
       <div style="text-align:center;margin-top:12px">
         <button onclick="showLoginScreen()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;font-family:'DM Sans',sans-serif">← Voltar ao login</button>
@@ -650,6 +650,7 @@ tr:hover td{background:#FAFCFF}
 <script src="https://www.google.com/recaptcha/api.js?render=6Lf3GUAtAAAAF2Cvs_LkZKIF0MK9zs9sFTtYDqf"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script>
 const SHEETS_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbxwU5uzBEIf0VGrghwe-n1JUuDTW-cR4FDYwItSWoOXvzN5TjCBe_skre2nLGzRCyDp7g/exec';
 const KEY='comissao_data';
@@ -858,12 +859,18 @@ function toggleTheme(){
 
 /* = FIREBASE CONFIG = */
 
+let fbAuth=null;
 function initFirebase(){
   if(fbApp) return;
   try{
     if(typeof firebase==='undefined'){console.warn('Firebase SDK não carregado ainda.');return;}
     fbApp=firebase.initializeApp(FB_CONFIG);
     fbDB=firebase.database();
+    fbAuth=firebase.auth();
+    // Sessão só dura enquanto o navegador estiver aberto
+    fbAuth.setPersistence(firebase.auth.Auth.Persistence.SESSION).catch(function(e){
+      console.warn('Persistência Auth:', e.message);
+    });
   }catch(e){console.warn('Firebase não inicializado:',e.message);}
 }
 
@@ -916,17 +923,15 @@ async function tryLogin(){
   if(blockMsg){ err.textContent=blockMsg; return; }
 
   if(!USUARIOS[user]){
-    const msg=registerFailedAttempt();
-    err.textContent=msg||'Usuário ou senha incorretos.';
+    registerFailedAttempt();
+    err.textContent='Usuário ou senha incorretos.';
     return;
   }
 
   if(btn){ btn.textContent='Verificando…'; btn.disabled=true; }
 
   try{
-    // reCAPTCHA desativado temporariamente
-
-    // reCAPTCHA v3 — invisível, completamente silencioso
+    // reCAPTCHA v3 — silencioso
     let recaptchaToken=null;
     try{
       if(typeof grecaptcha!=='undefined'){
@@ -945,7 +950,6 @@ async function tryLogin(){
       }
     }catch(e){ console.warn('reCAPTCHA:', e.message); }
 
-    // Verificar token no Apps Script se disponível
     if(recaptchaToken){
       try{
         const captchaResp=await fetch(SHEETS_WEBAPP_URL+'?action=verifyCaptcha',{
@@ -955,69 +959,119 @@ async function tryLogin(){
         });
         const captchaJson=await captchaResp.json();
         if(captchaJson.status==='bot'){
-          err.textContent='Acesso negado. Por favor, tente novamente em alguns instantes.';
+          err.textContent='Acesso negado. Por favor, tente novamente.';
           return;
         }
-      }catch(e){ console.warn('Verificação reCAPTCHA ignorada:', e.message); }
+      }catch(e){ console.warn('reCAPTCHA verificação ignorada:', e.message); }
     }
 
-    // Sempre consultar o Firebase como fonte de verdade
+    // Inicializar Firebase
     initFirebase();
-    let firebaseHash=null;
 
+    // Buscar e-mail do auditor no Firebase Realtime Database
+    let emailDoAuditor=null;
     if(fbDB){
       try{
-        // Timeout de 8 segundos para não travar indefinidamente
         const snap=await Promise.race([
-          fbDB.ref('auth/'+user+'/passHash').once('value'),
+          fbDB.ref('auth/'+user+'/email').once('value'),
           new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),8000))
         ]);
-        if(snap && snap.exists()) firebaseHash=snap.val();
-      }catch(e){
-        console.warn('Firebase lookup:', e.message);
-        if(e.message==='timeout'){
-          err.textContent='Tempo esgotado. Verifique sua conexão e tente novamente.';
-          return;
-        }
-      }
+        if(snap && snap.exists()) emailDoAuditor=snap.val();
+      }catch(e){ console.warn('Firebase email lookup:', e.message); }
     }
 
-    // Se tem hash no Firebase → verificar contra ele (ignora localStorage)
-    if(firebaseHash){
-      if(hashPass(pass)!==firebaseHash){
-        err.textContent='Usuário ou senha incorretos.';
+    // Se não tem e-mail cadastrado → primeiro acesso
+    if(!emailDoAuditor){
+      if(pass!==SENHA_GLOBAL){
+        const msg=registerFailedAttempt();
+        err.textContent=msg||'Usuário ou senha incorretos.';
         return;
       }
-      // Atualizar localStorage com dado do Firebase (sincronizar)
-      sessionStorage.setItem('hps_pass_'+user, firebaseHash);
-      completeLogin(user);
+      _resetTargetLogin=user;
+      document.getElementById('loginScreen').style.display='none';
+      document.getElementById('firstAccessScreen').style.display='block';
+      document.getElementById('loginPanelTitle').textContent='Primeiro acesso';
+      document.getElementById('loginPanelSub').textContent='Cadastre seu e-mail e defina uma senha pessoal';
       return;
     }
 
-    // Sem hash no Firebase → primeiro acesso
-    // Aceitar senha global para confirmar identidade
-    if(pass!==SENHA_GLOBAL){
-      const blockMsg2=registerFailedAttempt();
-      err.textContent=blockMsg2||'Usuário ou senha incorretos.';
+    // Tem e-mail → tentar login via Firebase Auth
+    if(!fbAuth){
+      err.textContent='Serviço de autenticação indisponível. Tente novamente.';
       return;
     }
-    // Ir para tela de primeiro acesso
-    document.getElementById('loginScreen').style.display='none';
-    document.getElementById('firstAccessScreen').style.display='block';
-    document.getElementById('loginPanelTitle').textContent='Primeiro acesso';
-    document.getElementById('loginPanelSub').textContent='Cadastre seu e-mail e defina uma senha pessoal';
-    _resetTargetLogin=user;
+
+    try{
+      await fbAuth.signInWithEmailAndPassword(emailDoAuditor, pass);
+      // Login bem-sucedido
+      clearLoginAttempts();
+      completeLogin(user);
+    }catch(authErr){
+      // Códigos de erro do Firebase Auth
+      if(authErr.code==='auth/wrong-password'||authErr.code==='auth/invalid-credential'){
+        const msg=registerFailedAttempt();
+        err.textContent=msg||'Usuário ou senha incorretos.';
+      } else if(authErr.code==='auth/user-not-found'){
+        // Conta não existe ainda no Firebase Auth → primeiro acesso
+        _resetTargetLogin=user;
+        document.getElementById('loginScreen').style.display='none';
+        document.getElementById('firstAccessScreen').style.display='block';
+        document.getElementById('loginPanelTitle').textContent='Primeiro acesso';
+        document.getElementById('loginPanelSub').textContent='Confirme seu e-mail e defina uma senha pessoal';
+        // Pré-preencher e-mail
+        const emailInput=document.getElementById('firstEmail');
+        if(emailInput) emailInput.value=emailDoAuditor;
+      } else if(authErr.code==='auth/too-many-requests'){
+        err.textContent='Conta temporariamente bloqueada pelo Google. Aguarde alguns minutos.';
+      } else {
+        err.textContent='Erro ao autenticar. Tente novamente.';
+        console.warn('Auth error:', authErr.code, authErr.message);
+      }
+    }
 
   }finally{
     if(btn){ btn.textContent='Entrar'; btn.disabled=false; }
   }
 }
 
-/* Completar login após autenticação */
 function tryLoginKey(e){ if(e.key==='Enter') tryLogin(); }
 
+/* === EXPIRAÇÃO POR INATIVIDADE (1 hora) === */
+const INACTIVITY_LIMIT = 60 * 60 * 1000; // 1 hora em ms
+let _inactivityTimer = null;
+
+function startInactivityTimer(){
+  clearInactivityTimer();
+  _inactivityTimer = setTimeout(function(){
+    if(currentUser){
+      // Fazer logout por inatividade
+      if(fbAuth) fbAuth.signOut().catch(function(){});
+      logout();
+      alert('Sua sessão expirou por inatividade. Faça login novamente.');
+    }
+  }, INACTIVITY_LIMIT);
+}
+
+function resetInactivityTimer(){
+  if(!currentUser) return;
+  clearInactivityTimer();
+  startInactivityTimer();
+}
+
+function clearInactivityTimer(){
+  if(_inactivityTimer){ clearTimeout(_inactivityTimer); _inactivityTimer=null; }
+}
+
+// Resetar timer em qualquer interação do usuário
+(function(){
+  ['mousedown','mousemove','keydown','touchstart','scroll','click'].forEach(function(evt){
+    document.addEventListener(evt, function(){ resetInactivityTimer(); }, {passive:true});
+  });
+})();
+
 function completeLogin(user){
-  clearLoginAttempts(); // resetar contador de tentativas
+  clearLoginAttempts();
+  startInactivityTimer(); // iniciar timer de expiração por inatividade
   currentUser={login:user, name:USUARIOS[user]};
   sessionStorage.setItem('hps_user', JSON.stringify(currentUser));
   $('loginPanel').style.display='none';
@@ -1070,42 +1124,55 @@ async function submitFirstAccess(){
   if(p1.length<6){ err.textContent='A senha deve ter pelo menos 6 caracteres.'; return; }
   if(p1!==p2){ err.textContent='As senhas não coincidem.'; return; }
 
-  if(btn){ btn.textContent='Salvando…'; btn.disabled=true; }
+  if(btn){ btn.textContent='Criando conta…'; btn.disabled=true; }
 
   try{
-    // 1. Salvar localmente (sempre funciona, não depende de Firebase)
-    sessionStorage.setItem('hps_pass_'+login, hashPass(p1));
-    sessionStorage.setItem('hps_email_'+login, email);
+    initFirebase();
+    if(!fbAuth){ err.textContent='Serviço de autenticação indisponível.'; return; }
 
-    // 2. Tentar salvar no Firebase (opcional — não bloqueia o login se falhar)
+    // Criar conta no Firebase Authentication
+    let firebaseUser=null;
+    try{
+      const cred=await fbAuth.createUserWithEmailAndPassword(email, p1);
+      firebaseUser=cred.user;
+      await firebaseUser.updateProfile({displayName: USUARIOS[login]||login});
+    }catch(authErr){
+      if(authErr.code==='auth/email-already-in-use'){
+        try{
+          const cred=await fbAuth.signInWithEmailAndPassword(email, p1);
+          firebaseUser=cred.user;
+        }catch(e){
+          err.textContent='Este e-mail já está cadastrado com outra senha. Use "Esqueci minha senha".';
+          return;
+        }
+      } else if(authErr.code==='auth/weak-password'){
+        err.textContent='Senha muito fraca. Use pelo menos 6 caracteres.';
+        return;
+      } else {
+        err.textContent='Erro ao criar conta: '+authErr.message;
+        return;
+      }
+    }
+
+    // Salvar e-mail no Firebase DB
     if(fbDB){
       fbDB.ref('auth/'+login).set({
         email: email,
-        passHash: hashPass(p1),
         updatedAt: new Date().toISOString()
-      }).catch(function(e){ console.warn('Firebase auth save:', e.message); });
-    } else {
-      // Firebase ainda não inicializado — inicializar agora e salvar
-      try{
-        initFirebase();
-        if(fbDB){
-          fbDB.ref('auth/'+login).set({
-            email: email,
-            passHash: hashPass(p1),
-            updatedAt: new Date().toISOString()
-          }).catch(function(e){ console.warn('Firebase auth save:', e.message); });
-        }
-      }catch(e){ console.warn('Firebase init failed:', e.message); }
+      }).catch(function(e){ console.warn('Firebase DB save:', e.message); });
     }
 
-    // 3. Concluir login imediatamente (não aguarda Firebase)
+    clearLoginAttempts();
     completeLogin(login);
 
   }catch(e){
-    err.textContent='Erro ao salvar: '+e.message;
+    err.textContent='Erro inesperado: '+e.message;
+    console.error('submitFirstAccess:', e);
+  }finally{
     if(btn){ btn.textContent='Salvar e entrar'; btn.disabled=false; }
   }
 }
+
 
 /* Esqueci minha senha: enviar código por e-mail */
 async function sendResetCode(){
@@ -1113,63 +1180,52 @@ async function sendResetCode(){
   const err=document.getElementById('forgotErr');
   err.textContent='';
 
-  // Verificar bloqueio por tentativas
-  const blockMsg=checkLoginBlocked();
-  if(blockMsg){ err.textContent=blockMsg; return; }
+  if(!USUARIOS[user]){ err.textContent='Usuário não encontrado.'; return; }
 
-  if(!USUARIOS[user]){
-    const msg=registerFailedAttempt();
-    err.textContent=msg||'Usuário ou senha incorretos.';
-    return;
-  }
-
-  // Buscar e-mail do usuário
-  let email=sessionStorage.getItem('hps_email_'+user)||localStorage.getItem('hps_email_'+user);
-  if(!email && fbDB){
-    try{
-      const snap=await fbDB.ref('auth/'+user+'/email').once('value');
-      if(snap.exists()) email=snap.val();
-    }catch(e){}
-  }
-  if(!email){
-    err.textContent='Nenhum e-mail cadastrado para este usuário. Entre em contato com o administrador.';
-    return;
-  }
-
-  // Gerar código de 6 dígitos
-  _resetCode=String(Math.floor(100000+Math.random()*900000));
-  _resetCodeTs=Date.now();
-  _resetTargetLogin=user;
-
-  // Enviar via EmailJS
   const btn=document.querySelector('#forgotScreen .login-btn');
   if(btn){ btn.textContent='Enviando…'; btn.disabled=true; }
 
   try{
-    await emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
-      to_email: email,
-      to_name: USUARIOS[user].split(' ')[0],
-      reset_code: _resetCode,
-      app_name: 'Comissão de Revisão de Prontuários'
-    });
+    initFirebase();
+    if(!fbAuth){ err.textContent='Serviço indisponível. Tente novamente.'; return; }
 
-    // Ir para tela de verificação
-    document.getElementById('forgotScreen').style.display='none';
-    document.getElementById('resetScreen').style.display='block';
-    document.getElementById('loginPanelTitle').textContent='Redefinir senha';
-    document.getElementById('loginPanelSub').textContent='';
-    document.getElementById('resetInfo').textContent='Código enviado para '+email.replace(/(.{2}).+(@.+)/, '$1…$2')+'! Válido por 15 minutos.';
-    setTimeout(()=>{ const el=document.getElementById('resetCode'); if(el) el.focus(); },100);
+    // Buscar e-mail no Firebase DB
+    let email=null;
+    if(fbDB){
+      try{
+        const snap=await Promise.race([
+          fbDB.ref('auth/'+user+'/email').once('value'),
+          new Promise(function(_,rej){ setTimeout(function(){ rej(new Error('timeout')); },8000); })
+        ]);
+        if(snap && snap.exists()) email=snap.val();
+      }catch(e){ console.warn('email lookup:', e.message); }
+    }
 
-  }catch(e){
-    err.textContent='Falha ao enviar e-mail. Verifique sua conexão.';
-    console.error('EmailJS error:', e);
+    if(!email){
+      err.textContent='Nenhum e-mail cadastrado. Faça o primeiro acesso com a senha padrão.';
+      return;
+    }
+
+    // Firebase Auth envia e-mail de redefinição nativamente
+    await fbAuth.sendPasswordResetEmail(email);
+
+    err.style.color='var(--green)';
+    err.textContent='E-mail de redefinição enviado para '+email.replace(/(.{2}).+(@.+)/,'$1…$2')+'. Verifique sua caixa de entrada.';
+    setTimeout(function(){ showLoginScreen(); }, 4000);
+
+  }catch(authErr){
+    if(authErr.code==='auth/user-not-found'){
+      err.textContent='Usuário sem conta criada. Faça o primeiro acesso com a senha padrão.';
+    } else {
+      err.textContent='Erro: '+authErr.message;
+      console.error('sendPasswordResetEmail:', authErr);
+    }
   }finally{
-    if(btn){ btn.textContent='Enviar código por e-mail'; btn.disabled=false; }
+    if(btn){ btn.textContent='Enviar e-mail de redefinição'; btn.disabled=false; }
   }
 }
 
-/* Verificar código e redefinir senha */
+
 async function submitResetPassword(){
   const code=document.getElementById('resetCode').value.trim();
   const p1=document.getElementById('resetPass1').value;
@@ -1248,6 +1304,8 @@ function logout(){
   closeChatWindow();
   const fab2=document.getElementById('chatFab'); if(fab2) fab2.style.display='none';
   if(fbDB&&currentUser) fbDB.ref('online/'+currentUser.login).remove();
+  if(fbAuth) fbAuth.signOut().catch(function(){});
+  clearInactivityTimer();
   // Ocultar botão Sair, voltar para aba "sobre"
   const sairBtn=$('tab-sair'); if(sairBtn) sairBtn.style.display='none';
   // Limpar campos de login
