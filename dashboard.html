@@ -731,7 +731,7 @@ function dashMulti(){
     <div class="panel">
       <div class="panel-head">
         <div><h2> Adeso da equipe multiprofissional</h2>
-        <p class="sub">Análise da presença de evoluo e qualidade do registro por equipe (Fisioterapia, Nutrio, Fonoaudiologia, Farmcia Clnica), com desdobramento por setor e por sub-item condicional. (Dados do Google Sheets, todos os auditores)</p></div>
+        <p class="sub">Análise da presença de evolução e qualidade do registro por equipe (Fisioterapia, Nutrio, Fonoaudiologia, Farmcia Clnica), com desdobramento por setor e por sub-item condicional. (Dados do Google Sheets, todos os auditores)</p></div>
         <div class="filters">
           <select id="mFilterSector" onchange="multiApply()"><option value="">Todos os setores</option>${secOpts.map(s=>`<option>${s}</option>`).join('')}</select>
           <select id="mFilterMonth" onchange="multiApply()"><option value="">Todos os meses</option>${monOpts.map(m=>`<option>${m}</option>`).join('')}</select>
@@ -762,7 +762,7 @@ function multiApply(){
       return `<div class="kpi kpi-${eq.cls}">
         <small>${eq.icone} ${eq.label}</small>
         <b style="color:${pct!==null?(pct>=80?'var(--green)':pct>=60?'var(--amber)':'var(--red)'):'var(--muted)'}">${pct!==null?pct+'%':''}</b>
-        <span>Presença de evoluo<br>${stats.pres.sim} sim  ${stats.pres.nao} não  ${total-stats.pres.app} N/A</span>
+        <span>Presença de evolução<br>${stats.pres.sim} sim  ${stats.pres.nao} não  ${total-stats.pres.app} N/A</span>
       </div>`;
     }).join('')}
   </div>`;
@@ -785,7 +785,7 @@ function multiApply(){
         </div>`;
       }).join('');
       return `<div class="eq-stat-row">
-        <span class="eq-stat-label">${si.text}<br><span style="font-size:10.5px;color:var(--muted)">Condicionado a: evoluo presente (n=${stats.presArr.length})</span></span>
+        <span class="eq-stat-label">${si.text}<br><span style="font-size:10.5px;color:var(--muted)">Condicionado a: evolução presente (n=${stats.presArr.length})</span></span>
         <span class="eq-stat-val" style="color:${siColor}">${si.pct!==null?si.pct+'%':''}</span>
       </div>${ssRows}`;
     }).join('');
@@ -793,7 +793,7 @@ function multiApply(){
     <div class="eq-card eq-card-${eq.cls}">
       <h4 style="color:var(--${eq.cls})">${eq.icone} ${eq.label}</h4>
       <div class="eq-stat-row">
-        <span class="eq-stat-label"><strong>Presença de evoluo registrada</strong></span>
+        <span class="eq-stat-label"><strong>Presença de evolução registrada</strong></span>
         <span class="eq-stat-val" style="color:${presColor}">${stats.pres.pct!==null?stats.pres.pct+'%':''}</span>
       </div>
       ${subsRows}
@@ -815,7 +815,7 @@ function multiApply(){
   //  Por setor: sub-itens detalhados 
   const subDetailTables=EQUIPES.map(eq=>{
     const allSubKeys=[eq.keyPresenca,...eq.subItens.map(s=>s.key),...eq.subItens.flatMap(s=>s.subSub.map(ss=>ss.key))];
-    const allSubTexts=["Presença de evoluo",...eq.subItens.map(s=>s.text.substring(0,60)+''),...eq.subItens.flatMap(s=>s.subSub.map(ss=>ss.text.substring(0,60)+''))];
+    const allSubTexts=["Presença de evolução",...eq.subItens.map(s=>s.text.substring(0,60)+''),...eq.subItens.flatMap(s=>s.subSub.map(ss=>ss.text.substring(0,60)+''))];
     const rows=setores.map(sec=>{
       const sarr=arr.filter(r=>r.sector===sec);
       const cells=allSubKeys.map(k=>{
@@ -853,11 +853,11 @@ function multiApply(){
   <!-- Comparativo visual geral + sub-itens -->
   <div class="charts-grid" style="margin-bottom:16px">
     <div class="chartbox">
-      <h3>Presença de evoluo  comparativo entre equipes (%)</h3>
+      <h3>Presença de evolução  comparativo entre equipes (%)</h3>
       <div class="chart"><canvas id="cEqGeral"></canvas></div>
     </div>
     <div class="chartbox">
-      <h3>Presença de evoluo por equipe  setor (%)</h3>
+      <h3>Presença de evolução por equipe  setor (%)</h3>
       <div class="chart"><canvas id="cEqSetor"></canvas></div>
     </div>
   </div>
@@ -869,7 +869,7 @@ function multiApply(){
   </div>
 
   <!-- Tabela por setor resumida -->
-  <h3 style="font-size:14px;font-weight:900;margin-bottom:10px">Presença de evoluo por setor  equipe</h3>
+  <h3 style="font-size:14px;font-weight:900;margin-bottom:10px">Presença de evolução por setor  equipe</h3>
   <div class="tablewrap" style="margin-bottom:20px">
     <table><thead><tr><th>Setor</th>${EQUIPES.map(eq=>`<th>${eq.icone} ${eq.label}</th>`).join('')}</tr></thead>
     <tbody>${setorRows}</tbody></table>
@@ -877,7 +877,7 @@ function multiApply(){
 
   <!-- Tabelas detalhadas por equipe  setor -->
   <h3 style="font-size:14px;font-weight:900;margin-bottom:4px">Detalhe por sub-item condicional  por equipe e setor</h3>
-  <p style="font-size:12px;color:var(--muted);margin-bottom:14px">Sub-itens s aparecem condicionados  presença de evoluo registrada. "" indica sem dados suficientes.</p>
+  <p style="font-size:12px;color:var(--muted);margin-bottom:14px">Sub-itens s aparecem condicionados  presença de evolução registrada. "" indica sem dados suficientes.</p>
   ${subDetailTables}
   `;
 
@@ -960,16 +960,16 @@ function renderBenchContent(){
 function exportCSV(){
   const multiKeys=allMultiKeys();
   const multiLabels={
-    fisio_presenca:'Fisio  Presença evoluo',
-    fisio_metas:'Fisio  Metas motoras/desmame O2',
-    nutri_presenca:'Nutri  Presença evoluo',
-    nutri_aval48h:'Nutri  Avaliação nutricional 48h',
-    nutri_reaval:'Nutri  Reavaliação nutricional diria',
-    fono_presenca:'Fono  Presença evoluo',
-    fono_deglut:'Fono  Avaliação de deglutio',
-    farma_presenca:'Farma  Presença evoluo',
-    farma_interacao:'Farma  Interao medicamentosa',
-    farma_reconcil:'Farma  Reconciliao medicamentosa'
+    fisio_presenca:'Fisio — Presença em evolução',
+    fisio_metas:'Fisio — Metas motoras/desmame O2',
+    nutri_presenca:'Nutri — Presença em evolução',
+    nutri_aval48h:'Nutri — Avaliação nutricional 48h',
+    nutri_reaval:'Nutri — Reavaliação nutricional diária',
+    fono_presenca:'Fono — Presença em evolução',
+    fono_deglut:'Fono — Avaliação de deglutição',
+    farma_presenca:'Farma — Presença em evolução',
+    farma_interacao:'Farma — Interação medicamentosa',
+    farma_reconcil:'Farma — Reconciliação medicamentosa'
   };
   const headers=['data_auditoria','numero_atendimento','setor_auditado','tipo_internacao','auditor','dias_internacao','desfecho','conformidade_geral_pct',
     ...ITEMS.map(i=>i.num+'. '+i.text.substring(0,55)),
@@ -1105,7 +1105,7 @@ async function renderAuditoresPanel(online){
   if(sessionStorage.getItem(SESSION_KEY)==='ok'){
     document.getElementById('loginOverlay').style.display='none';
     dash();
-    initAuditoresPanel();
+    setTimeout(initAuditoresPanel, 500);
   } else {
     const overlay=document.getElementById('loginOverlay');
     overlay.style.display='flex';
