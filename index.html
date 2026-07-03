@@ -353,7 +353,7 @@ tr:hover td{background:#FAFCFF}
   <nav class="tabs">
     <button class="tab active" id="tab-sobre" onclick="show('sobre',this)">Sobre a Comissão</button>
     <button class="tab" id="tab-coleta" onclick="requestColeta(this)">Coleta</button>
-    <button class="tab" id="tab-analise" onclick="window.open('dashboard.html','_blank')">Análise</button>
+    <button class="tab" id="tab-analise" onclick="abrirDashboard()">Análise</button>
     <button class="tab" id="tab-sair" onclick="logout()" style="color:var(--red);display:none">Sair</button>
   </nav>
 </div>
@@ -2331,6 +2331,13 @@ function onDesfechoChange(val){
     }
     if(label) label.textContent='Dias de internação';
   }
+}
+
+function abrirDashboard(){
+  if(!currentUser){ alert('Faça login para acessar o Dashboard.'); return; }
+  // Passar o login via sessionStorage para o dashboard validar
+  sessionStorage.setItem('hps_dash_user', currentUser.login);
+  window.open('dashboard.html','_blank');
 }
 
 function requestColeta(btn){
