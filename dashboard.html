@@ -55,7 +55,12 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',system-ui,sans-
 .tab:hover:not(.active){color:var(--navy);background:#F4F7FC}
 main{max-width:1320px;margin:0 auto;padding:22px 18px}
 .page{display:none}.page.active{display:block}
-.panel{background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:24px;margin-bottom:18px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:24px;margin-bottom:18px;transition:.2s}
+.panel.minimized>.panel-body,.panel.minimized>*:not(.panel-head){display:none!important}
+.panel.minimized{padding-bottom:16px}
+.panel-toggle{background:none;border:1.5px solid var(--line);border-radius:8px;width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--muted);transition:.2s;flex-shrink:0}
+.panel-toggle:hover{background:var(--soft);color:var(--navy)}
+.panel.minimized .panel-toggle{background:var(--soft)}
 .panel-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;margin-bottom:16px}
 h2{font-size:17px;font-weight:900;letter-spacing:-.02em}
 .sub{margin:4px 0 0;color:var(--muted);font-size:12.5px;line-height:1.45;max-width:840px}
@@ -188,6 +193,22 @@ function initFirebase(){
     fbDB=firebase.database();
   }catch(e){ console.warn('Firebase init error:', e.message); }
 }
+
+/* === MINIMIZAR PAINÉIS === */
+let _panelStates={};
+function togglePanel(id){
+  const panel=document.getElementById(id);
+  if(!panel) return;
+  const minimized=panel.classList.toggle('minimized');
+  _panelStates[id]=minimized;
+  // Atualizar ícone do botão
+  const btn=panel.querySelector('.panel-toggle');
+  if(btn) btn.textContent=minimized?'▼':'▲';
+}
+
+// Gera o botão de minimizar para injetar nos panel-heads
+function toggleBtn(id){ void(id); }
+
 
 /* === MODO NOTURNO === */
 function applyTheme(theme){
@@ -564,7 +585,9 @@ function dash(){
   destroy();
   const root=$('dash');
   root.innerHTML='<div class="panel empty"> Carregando dados do Google Sheets...</div>';
+  console.log('[DASH] Iniciando dash(), SHEETS_WEBAPP_URL:', SHEETS_WEBAPP_URL);
   loadFromSheets().then(()=>{
+    console.log('[DASH] loadFromSheets concluído. sheetsLoadError:', sheetsLoadError, '| data.length:', data.length);
     if(sheetsLoadError){
       root.innerHTML=`<div class="panel empty"> ${sheetsLoadError}<br><button class="secondary" style="margin-top:10px" onclick="dash()"> Tentar novamente</button></div>`;
       return;
@@ -716,6 +739,23 @@ function dashApply(){
     const aColors=byAuditor.map(a=>a.score>=90?'rgba(23,138,74,.8)':a.score>=75?'rgba(199,138,20,.8)':'rgba(199,54,47,.8)');
     mkChart('cAuditor','bar',byAuditor.map(a=>a.k),[{data:byAuditor.map(a=>a.n),backgroundColor:aColors,borderRadius:6,label:'Auditorias'}],{indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' '+ctx.raw+' auditoria(s)'}}},scales:{x:{beginAtZero:true,ticks:{stepSize:1},title:{display:true,text:'N de auditorias'}}}});
   }
+}
+
+/* === ADD PANEL TOGGLES === */
+function addPanelToggles(){
+  document.querySelectorAll('.panel').forEach(function(panel, idx){
+    if(panel.querySelector('.panel-toggle')) return;
+    var head=panel.querySelector('.panel-head');
+    if(!head) return;
+    if(!panel.id) panel.id='panel-auto-'+idx;
+    var btn=document.createElement('button');
+    btn.className='panel-toggle';
+    btn.title='Minimizar/expandir';
+    btn.textContent='▲';
+    var panelId=panel.id;
+    btn.onclick=function(){ togglePanel(panelId); };
+    head.appendChild(btn);
+  });
 }
 
 /* 
@@ -1105,6 +1145,7 @@ async function renderAuditoresPanel(online){
     +'</tr></thead>'
     +'<tbody>'+rows+'</tbody>'
     +'</table></div></div>';
+  setTimeout(addPanelToggles,50);
 }
 
 (function(){
