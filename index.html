@@ -996,36 +996,39 @@ async function tryLogin(){
     }
 
     // Tem e-mail → tentar login via Firebase Auth
+    console.log('[AUTH] fbAuth:', fbAuth ? 'OK' : 'NULL');
+    console.log('[AUTH] emailDoAuditor:', emailDoAuditor);
+
     if(!fbAuth){
       err.textContent='Serviço de autenticação indisponível. Tente novamente.';
       return;
     }
 
     try{
-      await fbAuth.signInWithEmailAndPassword(emailDoAuditor, pass);
-      // Login bem-sucedido
+      console.log('[AUTH] Tentando signInWithEmailAndPassword...');
+      const cred=await fbAuth.signInWithEmailAndPassword(emailDoAuditor, pass);
+      console.log('[AUTH] Login bem-sucedido! UID:', cred.user.uid);
       clearLoginAttempts();
       completeLogin(user);
     }catch(authErr){
-      // Códigos de erro do Firebase Auth
+      console.error('[AUTH] Erro:', authErr.code, authErr.message);
       if(authErr.code==='auth/wrong-password'||authErr.code==='auth/invalid-credential'){
         const msg=registerFailedAttempt();
         err.textContent=msg||'Usuário ou senha incorretos.';
-      } else if(authErr.code==='auth/user-not-found'){
+      } else if(authErr.code==='auth/user-not-found'||authErr.code==='auth/invalid-email'){
         // Conta não existe ainda no Firebase Auth → primeiro acesso
         _resetTargetLogin=user;
         document.getElementById('loginScreen').style.display='none';
         document.getElementById('firstAccessScreen').style.display='block';
         document.getElementById('loginPanelTitle').textContent='Primeiro acesso';
         document.getElementById('loginPanelSub').textContent='Confirme seu e-mail e defina uma senha pessoal';
-        // Pré-preencher e-mail
         const emailInput=document.getElementById('firstEmail');
         if(emailInput) emailInput.value=emailDoAuditor;
       } else if(authErr.code==='auth/too-many-requests'){
         err.textContent='Conta temporariamente bloqueada pelo Google. Aguarde alguns minutos.';
       } else {
-        err.textContent='Erro ao autenticar. Tente novamente.';
-        console.warn('Auth error:', authErr.code, authErr.message);
+        err.textContent='Erro ao autenticar ('+authErr.code+'). Tente novamente.';
+        console.warn('[AUTH] Código não tratado:', authErr.code, authErr.message);
       }
     }
 
