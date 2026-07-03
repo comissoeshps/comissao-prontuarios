@@ -513,7 +513,7 @@ tr:hover td{background:#FAFCFF}
     <!-- TELA 3: Esqueci minha senha — digitar login para receber código -->
     <div id="forgotScreen" style="display:none">
       <div class="login-field"><label>Seu usuário de login</label><input id="forgotUser" type="text" placeholder="Ex.: gabrielcm"></div>
-      <button class="login-btn" onclick="sendResetCode()">Enviar e-mail de redefinição</button>
+      <button class="login-btn" onclick="sendResetCode()">Enviar código por e-mail</button>
       <div id="forgotErr" class="login-error"></div>
       <div style="text-align:center;margin-top:12px">
         <button onclick="showLoginScreen()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;font-family:'DM Sans',sans-serif">← Voltar ao login</button>
@@ -918,7 +918,6 @@ async function tryLogin(){
   const btn=document.querySelector('#loginScreen .login-btn');
   err.textContent='';
 
-  // Verificar bloqueio por tentativas
   const blockMsg=checkLoginBlocked();
   if(blockMsg){ err.textContent=blockMsg; return; }
 
@@ -962,26 +961,25 @@ async function tryLogin(){
           err.textContent='Acesso negado. Por favor, tente novamente.';
           return;
         }
-      }catch(e){ console.warn('reCAPTCHA verificação ignorada:', e.message); }
+      }catch(e){ console.warn('reCAPTCHA ignorado:', e.message); }
     }
 
-    // Inicializar Firebase
+    // Firebase como fonte de verdade
     initFirebase();
+    let firebaseHash=null;
 
-    // Buscar e-mail do auditor no Firebase Realtime Database
-    let emailDoAuditor=null;
     if(fbDB){
       try{
         const snap=await Promise.race([
-          fbDB.ref('auth/'+user+'/email').once('value'),
-          new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),8000))
+          fbDB.ref('auth/'+user+'/passHash').once('value'),
+          new Promise(function(_,rej){ setTimeout(function(){ rej(new Error('timeout')); },8000); })
         ]);
-        if(snap && snap.exists()) emailDoAuditor=snap.val();
-      }catch(e){ console.warn('Firebase email lookup:', e.message); }
+        if(snap && snap.exists()) firebaseHash=snap.val();
+      }catch(e){ console.warn('Firebase lookup:', e.message); }
     }
 
-    // Se não tem e-mail cadastrado → primeiro acesso
-    if(!emailDoAuditor){
+    // Sem hash → primeiro acesso
+    if(!firebaseHash){
       if(pass!==SENHA_GLOBAL){
         const msg=registerFailedAttempt();
         err.textContent=msg||'Usuário ou senha incorretos.';
@@ -995,39 +993,15 @@ async function tryLogin(){
       return;
     }
 
-    // Tem e-mail → tentar login via Firebase Auth
-    if(!fbAuth){
-      err.textContent='Serviço de autenticação indisponível. Tente novamente.';
+    // Verificar senha contra o hash
+    if(hashPass(pass)!==firebaseHash){
+      const msg=registerFailedAttempt();
+      err.textContent=msg||'Usuário ou senha incorretos.';
       return;
     }
 
-    try{
-      await fbAuth.signInWithEmailAndPassword(emailDoAuditor, pass);
-      // Login bem-sucedido
-      clearLoginAttempts();
-      completeLogin(user);
-    }catch(authErr){
-      // Códigos de erro do Firebase Auth
-      if(authErr.code==='auth/wrong-password'||authErr.code==='auth/invalid-credential'){
-        const msg=registerFailedAttempt();
-        err.textContent=msg||'Usuário ou senha incorretos.';
-      } else if(authErr.code==='auth/user-not-found'){
-        // Conta não existe ainda no Firebase Auth → primeiro acesso
-        _resetTargetLogin=user;
-        document.getElementById('loginScreen').style.display='none';
-        document.getElementById('firstAccessScreen').style.display='block';
-        document.getElementById('loginPanelTitle').textContent='Primeiro acesso';
-        document.getElementById('loginPanelSub').textContent='Confirme seu e-mail e defina uma senha pessoal';
-        // Pré-preencher e-mail
-        const emailInput=document.getElementById('firstEmail');
-        if(emailInput) emailInput.value=emailDoAuditor;
-      } else if(authErr.code==='auth/too-many-requests'){
-        err.textContent='Conta temporariamente bloqueada pelo Google. Aguarde alguns minutos.';
-      } else {
-        err.textContent='Erro ao autenticar. Tente novamente.';
-        console.warn('Auth error:', authErr.code, authErr.message);
-      }
-    }
+    clearLoginAttempts();
+    completeLogin(user);
 
   }finally{
     if(btn){ btn.textContent='Entrar'; btn.disabled=false; }
@@ -1124,50 +1098,21 @@ async function submitFirstAccess(){
   if(p1.length<6){ err.textContent='A senha deve ter pelo menos 6 caracteres.'; return; }
   if(p1!==p2){ err.textContent='As senhas não coincidem.'; return; }
 
-  if(btn){ btn.textContent='Criando conta…'; btn.disabled=true; }
+  if(btn){ btn.textContent='Salvando…'; btn.disabled=true; }
 
   try{
     initFirebase();
-    if(!fbAuth){ err.textContent='Serviço de autenticação indisponível.'; return; }
-
-    // Criar conta no Firebase Authentication
-    let firebaseUser=null;
-    try{
-      const cred=await fbAuth.createUserWithEmailAndPassword(email, p1);
-      firebaseUser=cred.user;
-      await firebaseUser.updateProfile({displayName: USUARIOS[login]||login});
-    }catch(authErr){
-      if(authErr.code==='auth/email-already-in-use'){
-        try{
-          const cred=await fbAuth.signInWithEmailAndPassword(email, p1);
-          firebaseUser=cred.user;
-        }catch(e){
-          err.textContent='Este e-mail já está cadastrado com outra senha. Use "Esqueci minha senha".';
-          return;
-        }
-      } else if(authErr.code==='auth/weak-password'){
-        err.textContent='Senha muito fraca. Use pelo menos 6 caracteres.';
-        return;
-      } else {
-        err.textContent='Erro ao criar conta: '+authErr.message;
-        return;
-      }
-    }
-
-    // Salvar e-mail no Firebase DB
     if(fbDB){
-      fbDB.ref('auth/'+login).set({
+      await fbDB.ref('auth/'+login).set({
         email: email,
+        passHash: hashPass(p1),
         updatedAt: new Date().toISOString()
-      }).catch(function(e){ console.warn('Firebase DB save:', e.message); });
+      });
     }
-
     clearLoginAttempts();
     completeLogin(login);
-
   }catch(e){
-    err.textContent='Erro inesperado: '+e.message;
-    console.error('submitFirstAccess:', e);
+    err.textContent='Erro ao salvar: '+e.message;
   }finally{
     if(btn){ btn.textContent='Salvar e entrar'; btn.disabled=false; }
   }
@@ -1187,9 +1132,6 @@ async function sendResetCode(){
 
   try{
     initFirebase();
-    if(!fbAuth){ err.textContent='Serviço indisponível. Tente novamente.'; return; }
-
-    // Buscar e-mail no Firebase DB
     let email=null;
     if(fbDB){
       try{
@@ -1206,22 +1148,29 @@ async function sendResetCode(){
       return;
     }
 
-    // Firebase Auth envia e-mail de redefinição nativamente
-    await fbAuth.sendPasswordResetEmail(email);
+    _resetCode=String(Math.floor(100000+Math.random()*900000));
+    _resetCodeTs=Date.now();
+    _resetTargetLogin=user;
 
-    err.style.color='var(--green)';
-    err.textContent='E-mail de redefinição enviado para '+email.replace(/(.{2}).+(@.+)/,'$1…$2')+'. Verifique sua caixa de entrada.';
-    setTimeout(function(){ showLoginScreen(); }, 4000);
+    await emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
+      to_email: email,
+      to_name: USUARIOS[user].split(' ')[0],
+      reset_code: _resetCode,
+      app_name: 'Comissão de Revisão de Prontuários'
+    });
 
-  }catch(authErr){
-    if(authErr.code==='auth/user-not-found'){
-      err.textContent='Usuário sem conta criada. Faça o primeiro acesso com a senha padrão.';
-    } else {
-      err.textContent='Erro: '+authErr.message;
-      console.error('sendPasswordResetEmail:', authErr);
-    }
+    document.getElementById('forgotScreen').style.display='none';
+    document.getElementById('resetScreen').style.display='block';
+    document.getElementById('loginPanelTitle').textContent='Redefinir senha';
+    document.getElementById('loginPanelSub').textContent='';
+    document.getElementById('resetInfo').textContent='Código enviado para '+email.replace(/(.{2}).+(@.+)/,'$1…$2')+'! Válido por 15 minutos.';
+    setTimeout(function(){ const el=document.getElementById('resetCode'); if(el) el.focus(); },100);
+
+  }catch(e){
+    err.textContent='Falha ao enviar e-mail: '+e.message;
+    console.error('sendResetCode:', e);
   }finally{
-    if(btn){ btn.textContent='Enviar e-mail de redefinição'; btn.disabled=false; }
+    if(btn){ btn.textContent='Enviar código por e-mail'; btn.disabled=false; }
   }
 }
 
@@ -1304,7 +1253,6 @@ function logout(){
   closeChatWindow();
   const fab2=document.getElementById('chatFab'); if(fab2) fab2.style.display='none';
   if(fbDB&&currentUser) fbDB.ref('online/'+currentUser.login).remove();
-  if(fbAuth) fbAuth.signOut().catch(function(){});
   clearInactivityTimer();
   // Ocultar botão Sair, voltar para aba "sobre"
   const sairBtn=$('tab-sair'); if(sairBtn) sairBtn.style.display='none';
