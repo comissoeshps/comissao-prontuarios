@@ -1102,7 +1102,20 @@ async function renderAuditoresPanel(online){
 
 (function(){
   const SESSION_KEY='hps_dash_auth';
-  if(sessionStorage.getItem(SESSION_KEY)==='ok'){
+  const DASH_ADMINS=['gabrielcm']; // logins com acesso ao dashboard
+  const dashUser=sessionStorage.getItem('hps_dash_user');
+
+  // Verificar se usuário logado tem permissão
+  if(dashUser && !DASH_ADMINS.includes(dashUser)){
+    // Usuário sem permissão — mostrar tela bloqueada
+    document.body.innerHTML='<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:#EEF2F8;font-family:DM Sans,sans-serif">'
+      +'<div style="background:#fff;border-radius:18px;padding:40px;text-align:center;box-shadow:0 4px 24px rgba(12,32,58,.12);max-width:380px">'
+      +'<div style="font-size:48px;margin-bottom:16px">🔒</div>'
+      +'<div style="font-size:20px;font-weight:900;color:#0B1F3A;margin-bottom:8px">Acesso restrito</div>'
+      +'<div style="font-size:14px;color:#667085;margin-bottom:24px">O Dashboard é acessível apenas para administradores da Comissão.</div>'
+      +'<button onclick="window.close()" style="background:#1F6FEB;color:#fff;border:none;border-radius:10px;padding:12px 28px;font-size:14px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">Fechar</button>'
+      +'</div></div>';
+  } else if(sessionStorage.getItem(SESSION_KEY)==='ok'){
     document.getElementById('loginOverlay').style.display='none';
     dash();
     setTimeout(initAuditoresPanel, 500);
