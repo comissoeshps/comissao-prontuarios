@@ -1708,13 +1708,13 @@ async function loadMyAuditorias(){
         let anexosHtml='';
         if(anexos.length>0){
           const itens=anexos.map(function(a){
-            const isImg=String(a.tipo||'').includes('image');
-            const icon=isImg && a.thumbnail_url
-            const iconHtml=isImg && a.thumbnail_url
+            var isImg=String(a.tipo||'').includes('image');
+            var iconHtml=isImg && a.thumbnail_url
               ?'<img src="'+a.thumbnail_url+'" style="width:28px;height:28px;object-fit:cover;border-radius:4px">'
-              :'<span>'+(isImg?'IMG':'PDF')+'</span>';
-              +icon
+              :'<span>'+(isImg?'🖼':'📄')+'</span>';
+            return '<a href="'+a.url+'" target="_blank" title="'+a.nome_arquivo+'" style="display:inline-flex;align-items:center;gap:5px;text-decoration:none;background:var(--soft);border:1px solid var(--line);border-radius:7px;padding:3px 8px 3px 4px;font-size:11px;color:var(--navy);font-weight:600">'
               +iconHtml
+              +'<span style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+String(a.nome_arquivo||'arquivo').substring(0,30)+'</span>'
               +'</a>';
           }).join('');
           anexosHtml='<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)">'
