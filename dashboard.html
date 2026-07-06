@@ -215,14 +215,18 @@ function toggleBtn(id){ void(id); }
 
 /* === MODO NOTURNO === */
 function applyTheme(theme){
-  document.body.classList.toggle('dark', theme==='dark');
+  if(theme==='dark'){
+    document.body.classList.add('dark');
+  } else {
+    document.body.classList.remove('dark');
+  }
   const btn=document.getElementById('themeToggle');
   if(btn) btn.textContent = theme==='dark' ? '☀️' : '🌙';
-  localStorage.setItem('hps_theme', theme);
+  try{ localStorage.setItem('hps_theme', theme); }catch(e){}
 }
 function toggleTheme(){
   const isDark=document.body.classList.contains('dark');
-  applyTheme(isDark?'light':'dark');
+  applyTheme(isDark ? 'light' : 'dark');
 }
 (function(){
   // Limpar dados obsoletos do localStorage ao carregar
