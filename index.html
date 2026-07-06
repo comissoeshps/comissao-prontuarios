@@ -364,7 +364,7 @@ tr:hover td{background:#FAFCFF}
   </div>
   <nav class="tabs">
     <button class="tab active" id="tab-sobre" onclick="show('sobre',this)">Sobre a Comissão</button>
-    <button class="tab" id="tab-coleta" onclick="requestColeta(this)">Coleta</button>
+    <button class="tab" id="tab-coleta" onclick="requestColeta(this)">Login</button>
     <button class="tab" id="tab-analise" onclick="abrirDashboard()">Análise</button>
     <button class="tab" id="tab-plataforma" onclick="show('plataforma',this)">Sobre a plataforma</button>
     <button class="tab" id="tab-sair" onclick="logout()" style="color:var(--red);display:none">Sair</button>
@@ -1017,19 +1017,23 @@ function $(id){return document.getElementById(id);}
 
 /* ── MODO NOTURNO ── */
 function applyTheme(theme){
-  document.body.classList.toggle('dark', theme==='dark');
+  if(theme==='dark'){
+    document.body.classList.add('dark');
+  } else {
+    document.body.classList.remove('dark');
+  }
   const btn=document.getElementById('themeToggle');
   if(btn) btn.textContent = theme==='dark' ? '☀️' : '🌙';
-  localStorage.setItem('hps_theme', theme);
+  try{ localStorage.setItem('hps_theme', theme); }catch(e){}
 }
 function toggleTheme(){
   const isDark=document.body.classList.contains('dark');
-  applyTheme(isDark?'light':'dark');
+  applyTheme(isDark ? 'light' : 'dark');
 }
 (function(){
+  // Sempre iniciar no modo diurno (ignorar preferência do sistema)
   const saved=localStorage.getItem('hps_theme');
-  const prefersDark=window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-  applyTheme(saved || (prefersDark?'dark':'light'));
+  applyTheme(saved || 'light');
 })();
 
 
