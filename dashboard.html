@@ -159,7 +159,6 @@ tr:last-child td{border-bottom:none}
   </div>
   <nav class="tabs">
     <button class="tab active" onclick="show('dashboard');dash()">📊 Dashboard Geral</button>
-    <button class="tab" onclick="show('multiprofissional');dashMulti()">🏥 Equipe Multiprofissional</button>
     <button class="tab" onclick="show('benchmarks');renderBench()">🎯 Benchmarks</button>
   </nav>
   <button onclick="dashLogout()" style="border:1.5px solid var(--red);background:transparent;border-radius:10px;padding:6px 16px;font-size:12px;font-weight:700;cursor:pointer;color:var(--red);font-family:'DM Sans',sans-serif;white-space:nowrap;flex-shrink:0" onmouseover="this.style.background='#FDEEEE'" onmouseout="this.style.background='transparent'">Sair</button>
@@ -171,7 +170,6 @@ tr:last-child td{border-bottom:none}
   <div id="auditoresOnline" style="margin-bottom:18px"></div>
   <div id="dash"></div>
 </section>
-  <section id="multiprofissional" class="page"><div id="dashMulti"></div></section>
   <section id="benchmarks" class="page"><div id="benchContent"></div></section>
 </main>
 
@@ -480,6 +478,7 @@ function label(v){return v==='sim'?'sim':v==='nao'?'não':v==='na'?'N/A':''}
 function score(rec){
   let sim=0,nao=0,na=0,app=0;
   ITEMS.forEach(i=>{const v=rec.answers[i.num];if(v==='sim'){sim++;app++}else if(v==='nao'){nao++;app++}else if(v==='na')na++});
+  allMultiKeys().forEach(k=>{const v=rec.answers[k];if(v==='sim'){sim++;app++;}else if(v==='nao'){nao++;app++;}else if(v==='na')na++;});
   return{sim,nao,na,app,pct:app?Math.round(sim/app*100):0};
 }
 
@@ -732,6 +731,10 @@ function dashApply(){
       <td><b style="color:${s.pct>=90?'var(--green)':s.pct>=75?'var(--amber)':'var(--red)'}">${s.pct}%</b></td>
     </tr>`;}).join('')}
     </tbody></table></div>
+  </div>
+  <div class="panel" id="panel-multi-inline">
+    <div class="panel-head"><div><h2>Equipe Multiprofissional</h2><p class="sub">Conformidade por equipe — N/A excluído da análise</p></div></div>
+    <div id="dashMultiInline"></div>
   </div>`;
 
   const sC=bySector.map(x=>x.score>=90?'rgba(23,138,74,.8)':x.score>=75?'rgba(199,138,20,.8)':'rgba(199,54,47,.8)');
@@ -746,6 +749,63 @@ function dashApply(){
     const aColors=byAuditor.map(a=>a.score>=90?'rgba(23,138,74,.8)':a.score>=75?'rgba(199,138,20,.8)':'rgba(199,54,47,.8)');
     mkChart('cAuditor','bar',byAuditor.map(a=>a.k),[{data:byAuditor.map(a=>a.n),backgroundColor:aColors,borderRadius:6,label:'Auditorias'}],{indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' '+ctx.raw+' auditoria(s)'}}},scales:{x:{beginAtZero:true,ticks:{stepSize:1},title:{display:true,text:'N de auditorias'}}}});
   }
+}
+
+/* === EQUIPE MULTIPROFISSIONAL INLINE === */
+function renderMultiInline(){
+  const el=document.getElementById('dashMultiInline');
+  if(!el) return;
+  const arr=getFiltered();
+  if(!arr.length){ el.innerHTML='<div class="empty">Sem dados para os filtros selecionados.</div>'; return; }
+
+  const multiLbls={
+    fisio_presenca:'Fisioterapia — Presença em evolução',
+    fisio_metas:'Fisioterapia — Metas motoras/desmame O₂',
+    nutri_presenca:'Nutrição — Presença em evolução',
+    nutri_aval48h:'Nutrição — Avaliação nutricional 48h',
+    nutri_reaval:'Nutrição — Reavaliação nutricional diária',
+    fono_presenca:'Fonoaudiologia — Presença em evolução',
+    fono_deglut:'Fonoaudiologia — Avaliação de deglutição',
+    farma_presenca:'Farmácia — Presença em evolução',
+    farma_interacao:'Farmácia — Interação medicamentosa',
+    farma_reconcil:'Farmácia — Reconciliação medicamentosa'
+  };
+
+  const rows=allMultiKeys().map(function(k){
+    let sim=0,nao=0,na=0,app=0;
+    arr.forEach(function(r){
+      const v=r.answers[k];
+      if(v==='sim'){sim++;app++;}
+      else if(v==='nao'){nao++;app++;}
+      else if(v==='na') na++;
+    });
+    const pct=app?Math.round(sim/app*100):null;
+    const barColor=pct===null?'var(--line)':pct>=90?'var(--green)':pct>=75?'var(--amber)':'var(--red)';
+    return '<tr>'
+      +'<td style="padding:8px 12px;font-size:13px;color:var(--navy);font-weight:600">'+multiLbls[k]+'</td>'
+      +'<td style="padding:8px 12px;text-align:center;font-size:12px;color:var(--green);font-weight:700">'+sim+'</td>'
+      +'<td style="padding:8px 12px;text-align:center;font-size:12px;color:var(--red);font-weight:700">'+nao+'</td>'
+      +'<td style="padding:8px 12px;text-align:center;font-size:12px;color:var(--amber);font-weight:700">'+na+'</td>'
+      +'<td style="padding:8px 12px;min-width:140px">'
+      +'<div style="display:flex;align-items:center;gap:8px">'
+      +'<div style="flex:1;background:var(--line);border-radius:4px;height:8px;overflow:hidden">'
+      +(pct!==null?'<div style="width:'+pct+'%;height:100%;background:'+barColor+';border-radius:4px"></div>':'')
+      +'</div>'
+      +'<span style="font-size:12px;font-weight:800;color:'+barColor+';min-width:32px;text-align:right">'+(pct!==null?pct+'%':'—')+'</span>'
+      +'</div></td>'
+      +'</tr>';
+  }).join('');
+
+  el.innerHTML='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+    +'<thead><tr>'
+    +'<th style="background:#F4F7FC;padding:8px 12px;font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--line);text-align:left">Item</th>'
+    +'<th style="background:#F4F7FC;padding:8px 12px;font-size:10px;font-weight:800;color:var(--green);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--line);text-align:center">Sim</th>'
+    +'<th style="background:#F4F7FC;padding:8px 12px;font-size:10px;font-weight:800;color:var(--red);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--line);text-align:center">Não</th>'
+    +'<th style="background:#F4F7FC;padding:8px 12px;font-size:10px;font-weight:800;color:var(--amber);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--line);text-align:center">N/A</th>'
+    +'<th style="background:#F4F7FC;padding:8px 12px;font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--line)">Conformidade</th>'
+    +'</tr></thead>'
+    +'<tbody>'+rows+'</tbody>'
+    +'</table></div>';
 }
 
 /* === ADD PANEL TOGGLES === */
@@ -1153,6 +1213,7 @@ async function renderAuditoresPanel(online){
     +'<tbody>'+rows+'</tbody>'
     +'</table></div></div>';
   setTimeout(addPanelToggles,50);
+  setTimeout(renderMultiInline,150);
 }
 
 (function(){
