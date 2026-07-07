@@ -996,7 +996,7 @@ function clearLoginAttempts(){
 }
 
 (function(){
-  var CURRENT_VERSION = '2.1.0';
+  var CURRENT_VERSION = '2.2.0';
   var storedVersion = localStorage.getItem('hps_app_version');
   if(storedVersion !== CURRENT_VERSION){
     localStorage.setItem('hps_app_version', CURRENT_VERSION);
@@ -2816,15 +2816,31 @@ async function checkAttendance(){
         },100);
       }
       if(isAdmin()){
-        box.innerHTML=`<div class="alert-box" style="background:#EAF2FF;border:1px solid #90BBF5;color:#1a4a8a"><span class="ic">🔓</span><div>
-          <b>Modo administrador</b> — prontuário já auditado completamente por ${rec.auditor||'auditor'}${rec.date?' em '+rec.date:''}.
-          <br>Você pode editar e salvar novamente as respostas.
-        </div></div>`;
+        {
+          const multiResumoBanner=allMultiKeys().filter(k=>validAnswers.includes(rec.answers[k])).map(k=>{
+            const v=rec.answers[k]; const cor=v==='sim'?'#178A4A':v==='nao'?'#C7362F':'#C78A14';
+            const vl=v==='sim'?'Sim':v==='nao'?'Não':'N/A';
+            return '<li><span style="color:'+cor+';font-weight:700">['+vl+']</span> '+(multiLbl[k]||k)+'</li>';
+          }).join('');
+          box.innerHTML=`<div class="alert-box" style="background:#EAF2FF;border:1px solid #90BBF5;color:#1a4a8a"><span class="ic">🔓</span><div>
+            <b>Modo administrador</b> — prontuário já auditado completamente por ${rec.auditor||'auditor'}${rec.date?' em '+rec.date:''}.
+            <br>Você pode editar e salvar novamente as respostas.
+            ${multiResumoBanner?`<br><br><b>Equipe multiprofissional registrada:</b><ul style="margin:6px 0 0 16px;font-size:12px;line-height:1.7">${multiResumoBanner}</ul>`:''}
+          </div></div>`;
+        }
       } else {
-        box.innerHTML=`<div class="alert-box alert-blocked"><span class="ic">⛔</span><div>
-          <b>Este prontuário já foi auditado completamente</b> — todos os ${ITEMS.length} itens respondidos${rec.auditor?', por '+rec.auditor:''}${rec.date?' em '+rec.date:''}.
-          <br>As respostas estão exibidas abaixo apenas para consulta. Informe outro número para iniciar uma nova auditoria.
-        </div></div>`;
+        {
+          const multiResumoBlocked=allMultiKeys().filter(k=>validAnswers.includes(rec.answers[k])).map(k=>{
+            const v=rec.answers[k]; const cor=v==='sim'?'#178A4A':v==='nao'?'#C7362F':'#C78A14';
+            const vl=v==='sim'?'Sim':v==='nao'?'Não':'N/A';
+            return '<li><span style="color:'+cor+';font-weight:700">['+vl+']</span> '+(multiLbl[k]||k)+'</li>';
+          }).join('');
+          box.innerHTML=`<div class="alert-box alert-blocked"><span class="ic">⛔</span><div>
+            <b>Este prontuário já foi auditado completamente</b> — todos os ${ITEMS.length} itens respondidos${rec.auditor?', por '+rec.auditor:''}${rec.date?' em '+rec.date:''}.
+            <br>As respostas estão exibidas abaixo apenas para consulta. Informe outro número para iniciar uma nova auditoria.
+            ${multiResumoBlocked?`<br><br><b>Equipe multiprofissional registrada:</b><ul style="margin:6px 0 0 16px;font-size:12px;line-height:1.7">${multiResumoBlocked}</ul>`:''}
+          </div></div>`;
+        }
       }
       // Preencher campos de identificação com dados do prontuário existente
       if(rec.date)$('auditDate').value=rec.date;
@@ -2850,11 +2866,23 @@ async function checkAttendance(){
     const missingMultiDetails=missingMultiKeys.map(k=>multiLbl[k]||k);
     const allMissingDetails=[...missingDetails,...missingMultiDetails];
     const totalMissing=missingNums.length+missingMultiKeys.length;
+    // Itens multi já respondidos — para exibição no banner
+    const answeredMultiDetails=answeredMultiKeys.map(k=>{
+      const lbl=multiLbl[k]||k;
+      const v=rec.answers[k];
+      const vLabel=v==='sim'?'Sim':v==='nao'?'Não':v==='na'?'N/A':'';
+      const cor=v==='sim'?'#178A4A':v==='nao'?'#C7362F':'#C78A14';
+      return '<li><span style="color:'+cor+';font-weight:700">['+vLabel+']</span> '+lbl+'</li>';
+    });
+
     box.innerHTML=`<div class="alert-box alert-partial"><span class="ic">⚠️</span><div>
       <b>Este prontuário foi auditado parcialmente</b> — ${answeredNums.length} de ${ITEMS.length} itens respondidos${rec.auditor?', por '+rec.auditor:''}.
-      <br><br>
+      ${allMissingDetails.length?`<br><br>
       <b>${totalMissing} item(ns) pendente(s):</b>
-      <ul style="margin:6px 0 0 16px;font-size:12px;line-height:1.7">${allMissingDetails.map(d=>'<li>'+d+'</li>').join('')}</ul>
+      <ul style="margin:6px 0 0 16px;font-size:12px;line-height:1.7">${allMissingDetails.map(d=>'<li>'+d+'</li>').join('')}</ul>`:''}
+      ${answeredMultiDetails.length?`<br>
+      <b>Equipe multiprofissional já registrada (${answeredMultiDetails.length} item(ns)):</b>
+      <ul style="margin:6px 0 0 16px;font-size:12px;line-height:1.7">${answeredMultiDetails.join('')}</ul>`:''}
       <br>Os itens já registrados estão bloqueados (marcados com ✔). Complete apenas os pendentes.
     </div></div>`;
 
