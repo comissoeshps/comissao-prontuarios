@@ -2488,29 +2488,8 @@ function setTipoProntuario(tipo){
 }
 
 function onDesfechoChange(val){
-  const field=document.getElementById('diasInternField');
-  const input=document.getElementById('diasIntern');
-  const label=field ? field.querySelector('label') : null;
-  if(val==='Alta hospitalar'){
-    // Alta hospitalar = não é internação → dias não se aplica
-    if(input){
-      input.value='';
-      input.disabled=true;
-      input.placeholder='Não se aplica';
-      input.style.background='var(--soft)';
-      input.style.color='var(--muted)';
-    }
-    if(label) label.textContent='Dias de internação (N/A)';
-  } else {
-    // Outros desfechos → liberar o campo
-    if(input){
-      input.disabled=false;
-      input.placeholder='Ex.: 5';
-      input.style.background='';
-      input.style.color='';
-    }
-    if(label) label.textContent='Dias de internação';
-  }
+  // Campo "dias de internação" sempre habilitado —
+  // mesmo na alta hospitalar o prontuário pode registrar dias de internação
 }
 
 function abrirDashboard(){
