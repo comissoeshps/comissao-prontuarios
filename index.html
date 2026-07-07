@@ -2542,8 +2542,11 @@ function allMultiKeys(){
 }
 
 function setVal(key,val){
-  if(lockedItemNums.has(Number(key)) && !isAdmin())return;
-  current[key]=val;renderForm();renderMultiForm()
+  // suporta tanto chaves numéricas (itens online) quanto string (multi)
+  const keyNum=Number(key);
+  const locked=isNaN(keyNum) ? lockedItemNums.has(key) : lockedItemNums.has(keyNum);
+  if(locked && !isAdmin()) return;
+  current[key]=val;renderForm();renderMultiForm();
 }
 
 function clearForm(){
