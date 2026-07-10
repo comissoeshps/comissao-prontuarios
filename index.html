@@ -1228,6 +1228,16 @@ function completeLogin(user){
   startInactivityTimer(); // iniciar timer de expiração por inatividade
   currentUser={login:user, name:USUARIOS[user]};
   sessionStorage.setItem('hps_user', JSON.stringify(currentUser));
+
+  // Atualizar último acesso no Firebase a cada login
+  try{
+    initFirebase();
+    if(fbDB){
+      fbDB.ref('auth/'+user).update({
+        updatedAt: new Date().toISOString()
+      }).catch(function(e){ console.warn('updatedAt:', e.message); });
+    }
+  }catch(e){ console.warn('updatedAt error:', e.message); }
   $('loginPanel').style.display='none';
   $('coletaForm').style.display='block';
   const auditorInput=$('auditor');
