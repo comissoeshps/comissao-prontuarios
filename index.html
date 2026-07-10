@@ -1577,7 +1577,7 @@ function buildProfilePage(){
     <div class="stat-grid">
       <div class="stat-card"><div class="stat-num" id="statTotal">—</div><div class="stat-label">Total de auditorias</div></div>
       <div class="stat-card"><div class="stat-num" id="statMonth">—</div><div class="stat-label">Neste mês</div></div>
-      <div class="stat-card"><div class="stat-num" id="statConf">—</div><div class="stat-label">Conformidade média</div></div>
+      
     </div>
     <div class="panel-head" style="margin-top:4px"><div><h2>Prontuários auditados</h2></div></div>
     <div id="myAttendances" class="att-list"><div style="color:var(--muted);font-size:13px">Carregando…</div></div>
@@ -1868,10 +1868,8 @@ async function loadMyAuditorias(){
       const d=new Date(r.data_auditoria);
       return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();
     }).length;
-    const avgConf=total ? Math.round(myRecords.reduce((acc,r)=>acc+Number(r.conformidade_geral_pct||0),0)/total) : 0;
     $('statTotal').textContent=total;
     $('statMonth').textContent=thisMonth;
-    $('statConf').textContent=total?avgConf+'%':'—';
 
     const list=$('myAttendances');
     if(!myRecords.length){
