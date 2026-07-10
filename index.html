@@ -2504,12 +2504,13 @@ function onDesfechoChange(val){
 
 function abrirDashboard(){
   if(!currentUser){ alert('Faça login para acessar o Dashboard.'); return; }
-  // Passar o login via sessionStorage para o dashboard validar
   sessionStorage.setItem('hps_dash_user', currentUser.login);
-  // Abrir em nova aba; se bloqueado pelo navegador, abre na mesma aba
-  const win=window.open('dashboard.html','_blank');
+  // Construir URL absoluta baseada na localização atual
+  const base=window.location.href.replace(/\/[^\/]*$/, '/');
+  const dashUrl=base+'dashboard.html';
+  const win=window.open(dashUrl,'_blank');
   if(!win || win.closed || typeof win.closed==='undefined'){
-    window.location.href='dashboard.html';
+    window.location.href=dashUrl;
   }
 }
 
