@@ -1296,6 +1296,23 @@ async function renderAuditoresPanel(online){
 
     try{
       initFirebase();
+
+      // === FASE 2: Firebase Auth como fonte de verdade ===
+      if(fbAuth){
+        try{
+          await fbAuth.signInWithEmailAndPassword(authEmail(user), pass);
+          sessionStorage.setItem(SESSION_KEY,'ok');
+          sessionStorage.setItem('hps_dash_user', user);
+          document.getElementById('loginOverlay').style.display='none';
+          dash();
+          setTimeout(initAuditoresPanel, 500);
+          startDashInactivity();
+          return;
+        }catch(authErr){
+          // ainda não migrado OU senha divergente → segue no fluxo legado abaixo
+        }
+      }
+
       if(!fbDB){ err.textContent='Serviço indisponível. Tente novamente.'; return; }
 
       // Buscar hash no Firebase (mesma lógica do coleta)
