@@ -503,50 +503,35 @@ tr:hover td{background:#FAFCFF}
       <button class="login-btn" onclick="tryLogin()">Entrar</button>
       <div id="loginErr" class="login-error"></div>
       <div style="text-align:center;margin-top:14px">
-        <button onclick="showForgotScreen()" style="background:none;border:none;cursor:pointer;color:var(--blue);font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;text-decoration:underline">Esqueci minha senha</button>
+        <button onclick="showForgotInfo()" style="background:none;border:none;cursor:pointer;color:var(--blue);font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;text-decoration:underline">Esqueci minha senha</button>
       </div>
     </div>
 
-    <!-- TELA 2: Primeiro acesso — cadastrar e-mail e nova senha -->
+    <!-- TELA 2: Definir / Trocar senha pessoal -->
     <div id="firstAccessScreen" style="display:none">
-      <div style="background:#EAF2FF;border-radius:10px;padding:12px 14px;font-size:12.5px;color:var(--blue);margin-bottom:16px;line-height:1.5">
-        👋 Bem-vindo(a)! Para continuar, cadastre seu e-mail e defina uma senha pessoal.
+      <div id="pwChangeIntro" style="background:#EAF2FF;border-radius:10px;padding:12px 14px;font-size:12.5px;color:var(--blue);margin-bottom:16px;line-height:1.5">
+        👋 Por segurança, defina sua senha pessoal para continuar.
       </div>
-      <div class="login-field"><label>Seu e-mail</label><input id="firstEmail" type="email" placeholder="seu@email.com"></div>
-      <div class="login-field"><label>Nova senha (mín. 6 caracteres)</label><input id="firstPass1" type="password" placeholder="Nova senha"></div>
-      <div class="login-field"><label>Confirmar nova senha</label><input id="firstPass2" type="password" placeholder="Repita a senha"></div>
-      <button class="login-btn" onclick="submitFirstAccess()">Salvar e entrar</button>
+      <div class="login-field" id="pwCurrentField" style="display:none"><label>Senha atual</label><input id="pwCurrent" type="password" placeholder="Senha atual" autocomplete="current-password"></div>
+      <div class="login-field"><label>Nova senha (mín. 8 caracteres)</label><input id="firstPass1" type="password" placeholder="Nova senha" autocomplete="new-password"></div>
+      <div class="login-field"><label>Confirmar nova senha</label><input id="firstPass2" type="password" placeholder="Repita a senha" autocomplete="new-password"></div>
+      <button class="login-btn" onclick="submitPasswordChange()">Salvar senha</button>
       <div id="firstAccessErr" class="login-error"></div>
       <div style="text-align:center;margin-top:12px">
-        <button onclick="showLoginScreen()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;font-family:'DM Sans',sans-serif">← Voltar</button>
+        <button id="pwBackBtn" onclick="cancelPasswordChange()" style="display:none;background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;font-family:'DM Sans',sans-serif">← Cancelar</button>
       </div>
     </div>
 
-    <!-- TELA 3: Esqueci minha senha — digitar login para receber código -->
+    <!-- TELA 3: Esqueci minha senha — orientação (reset feito pelo administrador) -->
     <div id="forgotScreen" style="display:none">
-      <div class="login-field"><label>Seu usuário de login</label><input id="forgotUser" type="text" placeholder="Ex.: gabrielcm"></div>
-      <button class="login-btn" onclick="sendResetCode()">Enviar código por e-mail</button>
-      <div id="forgotErr" class="login-error"></div>
-      <div style="text-align:center;margin-top:12px">
+      <div style="background:#EAF2FF;border-radius:10px;padding:12px 14px;font-size:12.5px;color:var(--blue);line-height:1.6">
+        Para redefinir sua senha, entre em contato com o administrador da comissão. Por segurança, a redefinição é feita internamente.
+      </div>
+      <div style="text-align:center;margin-top:14px">
         <button onclick="showLoginScreen()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;font-family:'DM Sans',sans-serif">← Voltar ao login</button>
       </div>
     </div>
 
-    <!-- TELA 4: Verificar código e definir nova senha -->
-    <div id="resetScreen" style="display:none">
-      <div style="background:#E8F7EF;border-radius:10px;padding:12px 14px;font-size:12.5px;color:var(--green);margin-bottom:16px;line-height:1.5" id="resetInfo">
-        Código enviado! Verifique seu e-mail e insira abaixo.
-      </div>
-      <div class="login-field"><label>Código de verificação (6 dígitos)</label><input id="resetCode" type="text" placeholder="000000" maxlength="6" style="letter-spacing:.3em;font-size:18px;text-align:center"></div>
-      <div class="login-field"><label>Nova senha (mín. 6 caracteres)</label><input id="resetPass1" type="password" placeholder="Nova senha"></div>
-      <div class="login-field"><label>Confirmar nova senha</label><input id="resetPass2" type="password" placeholder="Repita a senha"></div>
-      <button class="login-btn" onclick="submitResetPassword()">Redefinir senha</button>
-      <div id="resetErr" class="login-error"></div>
-      <div style="text-align:center;margin-top:12px;display:flex;justify-content:space-between">
-        <button onclick="showForgotScreen()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;font-family:'DM Sans',sans-serif">Reenviar código</button>
-        <button onclick="showLoginScreen()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;font-family:'DM Sans',sans-serif">← Voltar</button>
-      </div>
-    </div>
   </div>
 
   <!-- Formulário (oculto até login) -->
@@ -943,7 +928,6 @@ const USUARIOS={
   "suehpc":"Sueh Pereira Cordeiro",
   "telmabdsr":"Telma Batista dos Santos Raze"
 };
-const SENHA_GLOBAL='comissaohps';
 const RECAPTCHA_SITE_KEY='6Lf3GUAtAAAAF2Cvs_LkZKIF0MK9zs9sFTtYDqf';
 const ADMINS=['gabrielcm']; // logins com permissão de editar prontuários já auditados
 function isAdmin(){ return currentUser && ADMINS.indexOf(currentUser.login) >= 0; }
@@ -1112,16 +1096,6 @@ function showLoginScreen(){
   });
 }
 
-function showForgotScreen(){
-  document.getElementById('loginScreen').style.display='none';
-  document.getElementById('forgotScreen').style.display='block';
-  document.getElementById('firstAccessScreen').style.display='none';
-  document.getElementById('resetScreen').style.display='none';
-  document.getElementById('loginPanelTitle').textContent='Recuperar senha';
-  document.getElementById('loginPanelSub').textContent='Informe seu usuário para receber um código por e-mail';
-  setTimeout(()=>{ const el=document.getElementById('forgotUser'); if(el) el.focus(); },100);
-}
-
 /* tryLogin — com detecção de primeiro acesso */
 async function tryLogin(){
   const user=$('loginUser').value.trim().toLowerCase();
@@ -1142,95 +1116,28 @@ async function tryLogin(){
   if(btn){ btn.textContent='Verificando…'; btn.disabled=true; }
 
   try{
-    // === FASE 2: Firebase Auth como fonte de verdade ===
-    // Se autenticar direto no Firebase Auth, o usuário já está migrado —
-    // pula todo o fluxo legado. Caso contrário, cai no legado (que migra).
     initFirebase();
-    if(fbAuth){
-      try{
-        await fbAuth.signInWithEmailAndPassword(authEmail(user), pass);
-        clearLoginAttempts();
-        completeLogin(user);
-        return;
-      }catch(authErr){
-        // ainda não migrado OU senha divergente → segue no fluxo legado abaixo
-      }
-    }
+    if(!fbAuth){ err.textContent='Serviço indisponível. Recarregue a página e tente novamente.'; return; }
 
-    // reCAPTCHA v3 — silencioso
-    let recaptchaToken=null;
+    // Autenticação EXCLUSIVA pelo Firebase Auth (sem senha global, sem hash legado)
     try{
-      if(typeof grecaptcha!=='undefined'){
-        recaptchaToken=await new Promise(function(res){
-          try{
-            grecaptcha.ready(function(){
-              try{
-                grecaptcha.execute(RECAPTCHA_SITE_KEY,{action:'login'})
-                  .then(function(t){ res(t); })
-                  .catch(function(){ res(null); });
-              }catch(ex){ res(null); }
-            });
-          }catch(ex2){ res(null); }
-          setTimeout(function(){ res(null); }, 5000);
-        });
-      }
-    }catch(e){ console.warn('reCAPTCHA:', e.message); }
-
-    if(recaptchaToken){
-      try{
-        const captchaResp=await fetch(SHEETS_WEBAPP_URL+'?action=verifyCaptcha',{
-          method:'POST',
-          headers:{'Content-Type':'text/plain;charset=utf-8'},
-          body:JSON.stringify({action:'verifyCaptcha', token:recaptchaToken})
-        });
-        const captchaJson=await captchaResp.json();
-        if(captchaJson.status==='bot'){
-          err.textContent='Acesso negado. Por favor, tente novamente.';
-          return;
-        }
-      }catch(e){ console.warn('reCAPTCHA ignorado:', e.message); }
-    }
-
-    // Firebase como fonte de verdade
-    initFirebase();
-    let firebaseHash=null;
-
-    if(fbDB){
-      try{
-        const snap=await Promise.race([
-          fbDB.ref('auth/'+user+'/passHash').once('value'),
-          new Promise(function(_,rej){ setTimeout(function(){ rej(new Error('timeout')); },8000); })
-        ]);
-        if(snap && snap.exists()) firebaseHash=snap.val();
-      }catch(e){ console.warn('Firebase lookup:', e.message); }
-    }
-
-    // Sem hash → primeiro acesso
-    if(!firebaseHash){
-      if(pass!==SENHA_GLOBAL){
-        const msg=registerFailedAttempt();
-        err.textContent=msg||'Usuário ou senha incorretos.';
-        return;
-      }
-      _resetTargetLogin=user;
-      document.getElementById('loginScreen').style.display='none';
-      document.getElementById('firstAccessScreen').style.display='block';
-      document.getElementById('loginPanelTitle').textContent='Primeiro acesso';
-      document.getElementById('loginPanelSub').textContent='Cadastre seu e-mail e defina uma senha pessoal';
-      return;
-    }
-
-    // Verificar senha contra o hash
-    if(hashPass(pass)!==firebaseHash){
-      const msg=registerFailedAttempt();
-      err.textContent=msg||'Usuário ou senha incorretos.';
+      await fbAuth.signInWithEmailAndPassword(authEmail(user), pass);
+    }catch(e){
+      registerFailedAttempt();
+      err.textContent='Usuário ou senha incorretos.';
       return;
     }
 
     clearLoginAttempts();
-    bridgeToFirebaseAuth(user, pass); // FASE 1: provisiona no Firebase Auth (best-effort)
-    completeLogin(user);
 
+    // Primeiro acesso com senha provisória → troca obrigatória
+    if(await needsPasswordChange(user)){
+      _pwChangeUser=user;
+      showChangePasswordScreen(true);
+      return;
+    }
+
+    completeLogin(user);
   }finally{
     if(btn){ btn.textContent='Entrar'; btn.disabled=false; }
   }
@@ -1314,137 +1221,103 @@ function completeLogin(user){
   afterLogin();
 }
 
-/* Hash simples para senha (não criptográfico, mas suficiente para este contexto) */
-function hashPass(pass){
-  let h=0;
-  for(let i=0;i<pass.length;i++) h=(Math.imul(31,h)+pass.charCodeAt(i))|0;
-  return 'hps_'+Math.abs(h).toString(36)+'_'+pass.length;
+/* === TROCA DE SENHA (Firebase Auth) === */
+let _pwChangeUser = null;
+let _pwChangeMandatory = false;
+
+// True enquanto o usuário ainda estiver na senha provisória (precisa trocar)
+async function needsPasswordChange(user){
+  try{
+    initFirebase();
+    if(!fbDB) return true; // fail-closed: sem DB, força a troca por segurança
+    const snap = await fbDB.ref('perfis/'+user+'/pwSet').once('value');
+    return !(snap.exists() && snap.val()===true);
+  }catch(e){
+    console.warn('[pwSet] leitura falhou — forçando troca por segurança:', e.message);
+    return true; // fail-closed
+  }
 }
 
-/* Primeiro acesso: salvar e-mail e nova senha */
-async function submitFirstAccess(){
-  const login=_resetTargetLogin;
-  const email=document.getElementById('firstEmail').value.trim();
+// Abre a tela de senha. mandatory=true no primeiro acesso (não dá para pular).
+function showChangePasswordScreen(mandatory){
+  _pwChangeMandatory = !!mandatory;
+  if(!_pwChangeUser && currentUser) _pwChangeUser = currentUser.login;
+  const lp=$('loginPanel'); if(lp) lp.style.display='block';
+  if(mandatory===false){ const cf=$('coletaForm'); if(cf) cf.style.display='none'; }
+  ['loginScreen','forgotScreen','resetScreen'].forEach(function(id){ const el=document.getElementById(id); if(el) el.style.display='none'; });
+  const fa=document.getElementById('firstAccessScreen'); if(fa) fa.style.display='block';
+  const cur=document.getElementById('pwCurrentField'); if(cur) cur.style.display = mandatory ? 'none' : 'block';
+  const back=document.getElementById('pwBackBtn'); if(back) back.style.display = mandatory ? 'none' : 'block';
+  const intro=document.getElementById('pwChangeIntro');
+  if(intro) intro.textContent = mandatory
+    ? '👋 Por segurança, defina sua senha pessoal para continuar. A senha provisória deixa de valer.'
+    : 'Defina uma nova senha pessoal.';
+  const t=document.getElementById('loginPanelTitle'); if(t) t.textContent = mandatory ? 'Defina sua senha' : 'Trocar senha';
+  const s=document.getElementById('loginPanelSub'); if(s) s.textContent='';
+  ['firstPass1','firstPass2','pwCurrent'].forEach(function(id){ const el=document.getElementById(id); if(el) el.value=''; });
+  const er=document.getElementById('firstAccessErr'); if(er) er.textContent='';
+  setTimeout(function(){ const f=document.getElementById(mandatory?'firstPass1':'pwCurrent'); if(f) f.focus(); },100);
+}
+
+async function submitPasswordChange(){
   const p1=document.getElementById('firstPass1').value;
   const p2=document.getElementById('firstPass2').value;
   const err=document.getElementById('firstAccessErr');
   const btn=document.querySelector('#firstAccessScreen .login-btn');
   err.textContent='';
-
-  if(!login){ err.textContent='Sessão expirada. Volte e faça login novamente.'; return; }
-  if(!email||!email.includes('@')){ err.textContent='Informe um e-mail válido.'; return; }
-  if(p1.length<6){ err.textContent='A senha deve ter pelo menos 6 caracteres.'; return; }
+  const user=_pwChangeUser;
+  if(!user){ err.textContent='Sessão expirada. Faça login novamente.'; return; }
+  if(p1.length<8){ err.textContent='A senha deve ter pelo menos 8 caracteres.'; return; }
   if(p1!==p2){ err.textContent='As senhas não coincidem.'; return; }
 
   if(btn){ btn.textContent='Salvando…'; btn.disabled=true; }
-
   try{
     initFirebase();
-    if(fbDB){
-      await fbDB.ref('auth/'+login).set({
-        email: email,
-        passHash: hashPass(p1),
-        updatedAt: new Date().toISOString()
-      });
-    }
-    clearLoginAttempts();
-    bridgeToFirebaseAuth(login, p1); // FASE 1: provisiona no Firebase Auth
-    completeLogin(login);
-  }catch(e){
-    err.textContent='Erro ao salvar: '+e.message;
-  }finally{
-    if(btn){ btn.textContent='Salvar e entrar'; btn.disabled=false; }
-  }
-}
+    if(!fbAuth || !fbAuth.currentUser){ err.textContent='Sessão expirada. Faça login novamente.'; return; }
 
-
-/* Esqueci minha senha: enviar código por e-mail */
-async function sendResetCode(){
-  const user=document.getElementById('forgotUser').value.trim().toLowerCase();
-  const err=document.getElementById('forgotErr');
-  err.textContent='';
-
-  if(!USUARIOS[user]){ err.textContent='Usuário não encontrado.'; return; }
-
-  const btn=document.querySelector('#forgotScreen .login-btn');
-  if(btn){ btn.textContent='Enviando…'; btn.disabled=true; }
-
-  try{
-    initFirebase();
-    let email=null;
-    if(fbDB){
+    // Modo voluntário: reautentica com a senha atual antes de trocar
+    if(!_pwChangeMandatory){
+      const cur=document.getElementById('pwCurrent').value;
+      if(!cur){ err.textContent='Informe sua senha atual.'; return; }
       try{
-        const snap=await Promise.race([
-          fbDB.ref('auth/'+user+'/email').once('value'),
-          new Promise(function(_,rej){ setTimeout(function(){ rej(new Error('timeout')); },8000); })
-        ]);
-        if(snap && snap.exists()) email=snap.val();
-      }catch(e){ console.warn('email lookup:', e.message); }
+        const cred=firebase.auth.EmailAuthProvider.credential(authEmail(user), cur);
+        await fbAuth.currentUser.reauthenticateWithCredential(cred);
+      }catch(e){ err.textContent='Senha atual incorreta.'; return; }
     }
 
-    if(!email){
-      err.textContent='Nenhum e-mail cadastrado. Faça o primeiro acesso com a senha padrão.';
-      return;
+    await fbAuth.currentUser.updatePassword(p1);
+    if(fbDB){ try{ await fbDB.ref('perfis/'+user+'/pwSet').set(true); }catch(e){ console.warn('pwSet set:', e.message); } }
+
+    if(_pwChangeMandatory){
+      _pwChangeMandatory=false;
+      completeLogin(user);
+    }else{
+      const lp=$('loginPanel'); if(lp) lp.style.display='none';
+      const cf=$('coletaForm'); if(cf) cf.style.display='block';
+      alert('✅ Senha alterada com sucesso.');
     }
-
-    _resetCode=String(Math.floor(100000+Math.random()*900000));
-    _resetCodeTs=Date.now();
-    _resetTargetLogin=user;
-
-    await emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
-      to_email: email,
-      to_name: USUARIOS[user].split(' ')[0],
-      reset_code: _resetCode,
-      app_name: 'Comissão de Revisão de Prontuários'
-    });
-
-    document.getElementById('forgotScreen').style.display='none';
-    document.getElementById('resetScreen').style.display='block';
-    document.getElementById('loginPanelTitle').textContent='Redefinir senha';
-    document.getElementById('loginPanelSub').textContent='';
-    document.getElementById('resetInfo').textContent='Código enviado para '+email.replace(/(.{2}).+(@.+)/,'$1…$2')+'! Válido por 15 minutos.';
-    setTimeout(function(){ const el=document.getElementById('resetCode'); if(el) el.focus(); },100);
-
   }catch(e){
-    err.textContent='Falha ao enviar e-mail: '+e.message;
-    console.error('sendResetCode:', e);
+    const c=(e&&e.code)||'';
+    if(c==='auth/requires-recent-login'){ err.textContent='Por segurança, saia e entre novamente antes de trocar a senha.'; }
+    else if(c==='auth/weak-password'){ err.textContent='Senha muito fraca. Use pelo menos 8 caracteres.'; }
+    else{ err.textContent='Erro ao alterar senha: '+(e.message||c); }
   }finally{
-    if(btn){ btn.textContent='Enviar código por e-mail'; btn.disabled=false; }
+    if(btn){ btn.textContent='Salvar senha'; btn.disabled=false; }
   }
 }
 
+function cancelPasswordChange(){
+  const lp=$('loginPanel'); if(lp) lp.style.display='none';
+  const cf=$('coletaForm'); if(cf) cf.style.display='block';
+}
 
-async function submitResetPassword(){
-  const code=document.getElementById('resetCode').value.trim();
-  const p1=document.getElementById('resetPass1').value;
-  const p2=document.getElementById('resetPass2').value;
-  const err=document.getElementById('resetErr');
-  err.textContent='';
-
-  // Verificar expiração (15 minutos)
-  if(!_resetCode || Date.now()-_resetCodeTs > 15*60*1000){
-    err.textContent='Código expirado. Solicite um novo.'; return;
-  }
-  if(code!==_resetCode){ err.textContent='Código incorreto.'; return; }
-  if(p1.length<6){ err.textContent='A senha deve ter pelo menos 6 caracteres.'; return; }
-  if(p1!==p2){ err.textContent='As senhas não coincidem.'; return; }
-
-  const login=_resetTargetLogin;
-  sessionStorage.setItem('hps_pass_'+login, hashPass(p1));
-
-  if(fbDB){
-    try{
-      await fbDB.ref('auth/'+login).update({
-        passHash: hashPass(p1),
-        updatedAt: new Date().toISOString()
-      });
-    }catch(e){ console.warn('Firebase update failed:', e.message); }
-  }
-
-  bridgeToFirebaseAuth(login, p1); // FASE 1: mantém a senha no Firebase Auth em dia
-  _resetCode=null; _resetCodeTs=null; _resetTargetLogin=null;
-  alert('✅ Senha redefinida com sucesso! Faça login com a nova senha.');
-  showLoginScreen();
+// "Esqueci minha senha" → orientação (redefinição feita pelo administrador)
+function showForgotInfo(){
+  const ls=document.getElementById('loginScreen'); if(ls) ls.style.display='none';
+  const fa=document.getElementById('firstAccessScreen'); if(fa) fa.style.display='none';
+  const fg=document.getElementById('forgotScreen'); if(fg) fg.style.display='block';
+  const t=document.getElementById('loginPanelTitle'); if(t) t.textContent='Recuperar senha';
+  const s=document.getElementById('loginPanelSub'); if(s) s.textContent='';
 }
 
 
@@ -1564,6 +1437,7 @@ function buildProfilePage(){
     <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:16px">
       <h2>Meu perfil</h2>
       <button onclick="toggleEditProfile()" id="btnEditProfile" style="border:1.5px solid var(--blue);background:#fff;border-radius:10px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;color:var(--blue);font-family:'DM Sans',sans-serif;transition:.15s">Editar perfil</button>
+      <button onclick="showChangePasswordScreen(false)" style="border:1.5px solid var(--line);background:#fff;border-radius:10px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;color:var(--muted);font-family:'DM Sans',sans-serif;transition:.15s;margin-left:8px">Trocar senha</button>
     </div>
 
     <!-- Visualização -->
