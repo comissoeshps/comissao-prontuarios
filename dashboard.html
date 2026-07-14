@@ -12,6 +12,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <style>
 :root{
   --navy:#0B1F3A;--navy2:#143B68;--blue:#1F6FEB;--cyan:#16A3B8;--green:#178A4A;
@@ -187,12 +188,47 @@ const FB_CONFIG={
   appId:'1:173375373355:web:8fe420e5a470c176d82a6e'
 };
 let fbDB=null;
+let fbAuth=null;
 function initFirebase(){
   if(fbDB) return;
   try{
     if(!firebase.apps.length) firebase.initializeApp(FB_CONFIG);
     fbDB=firebase.database();
+    try{
+      fbAuth=firebase.auth();
+      fbAuth.setPersistence(firebase.auth.Auth.Persistence.SESSION).catch(function(e){ console.warn('Persistência Auth:', e.message); });
+    }catch(e){ console.warn('Auth init:', e.message); }
   }catch(e){ console.warn('Firebase init error:', e.message); }
+}
+
+/* === FIREBASE AUTH — FASE 1 (PONTE) ===
+   Provisiona o admin no Firebase Auth SEM alterar o login legado.
+   Best-effort: qualquer falha aqui NUNCA bloqueia o acesso. */
+const AUTH_EMAIL_DOMAIN='comissaohps.local';
+function authEmail(user){ return String(user).toLowerCase()+'@'+AUTH_EMAIL_DOMAIN; }
+async function bridgeToFirebaseAuth(user, pass){
+  try{
+    initFirebase();
+    if(!fbAuth) return;
+    const email=authEmail(user);
+    try{
+      await fbAuth.signInWithEmailAndPassword(email, pass);
+    }catch(e){
+      try{
+        await fbAuth.createUserWithEmailAndPassword(email, pass);
+        console.info('[Auth] usuário provisionado no Firebase Auth:', user);
+      }catch(e2){
+        const c=(e2&&e2.code)||'';
+        if(c==='auth/email-already-in-use'){
+          console.warn('[Auth] conta existe mas senha diverge para', user, '(reconciliar no corte)');
+        }else if(c==='auth/operation-not-allowed'){
+          console.warn('[Auth] habilite o provedor E-mail/Senha no console para provisionar');
+        }else{
+          console.warn('[Auth] provisionamento indisponível:', c||e2.message);
+        }
+      }
+    }
+  }catch(err){ console.warn('[Auth] ponte falhou:', err.message); }
 }
 
 /* === MINIMIZAR PAINÉIS === */
@@ -1276,6 +1312,8 @@ async function renderAuditoresPanel(online){
 
       // Verificar senha
       if(hashPass(pass)!==firebaseHash){ err.textContent='Usuário ou senha incorretos.'; return; }
+
+      bridgeToFirebaseAuth(user, pass); // FASE 1: provisiona no Firebase Auth (best-effort)
 
       // Login bem-sucedido
       sessionStorage.setItem(SESSION_KEY,'ok');
