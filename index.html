@@ -1142,6 +1142,21 @@ async function tryLogin(){
   if(btn){ btn.textContent='Verificando…'; btn.disabled=true; }
 
   try{
+    // === FASE 2: Firebase Auth como fonte de verdade ===
+    // Se autenticar direto no Firebase Auth, o usuário já está migrado —
+    // pula todo o fluxo legado. Caso contrário, cai no legado (que migra).
+    initFirebase();
+    if(fbAuth){
+      try{
+        await fbAuth.signInWithEmailAndPassword(authEmail(user), pass);
+        clearLoginAttempts();
+        completeLogin(user);
+        return;
+      }catch(authErr){
+        // ainda não migrado OU senha divergente → segue no fluxo legado abaixo
+      }
+    }
+
     // reCAPTCHA v3 — silencioso
     let recaptchaToken=null;
     try{
