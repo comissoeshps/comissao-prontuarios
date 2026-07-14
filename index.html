@@ -1053,6 +1053,39 @@ function initFirebase(){
   }catch(e){console.warn('Firebase não inicializado:',e.message);}
 }
 
+/* === FIREBASE AUTH — FASE 1 (PONTE) ===
+   Provisiona cada usuário no Firebase Auth SEM alterar o login legado.
+   Identidade sintética baseada no username (preserva toda a lógica atual).
+   Tudo best-effort: qualquer falha aqui NUNCA bloqueia o login. */
+const AUTH_EMAIL_DOMAIN='comissaohps.local';
+function authEmail(user){ return String(user).toLowerCase()+'@'+AUTH_EMAIL_DOMAIN; }
+
+async function bridgeToFirebaseAuth(user, pass){
+  try{
+    initFirebase();
+    if(!fbAuth) return;
+    const email=authEmail(user);
+    try{
+      await fbAuth.signInWithEmailAndPassword(email, pass);
+      // conta já existe e a senha confere — nada a fazer
+    }catch(e){
+      try{
+        await fbAuth.createUserWithEmailAndPassword(email, pass);
+        console.info('[Auth] usuário provisionado no Firebase Auth:', user);
+      }catch(e2){
+        const c=(e2&&e2.code)||'';
+        if(c==='auth/email-already-in-use'){
+          console.warn('[Auth] conta existe mas senha diverge para', user, '(reconciliar no corte)');
+        }else if(c==='auth/operation-not-allowed'){
+          console.warn('[Auth] habilite o provedor E-mail/Senha no console para provisionar');
+        }else{
+          console.warn('[Auth] provisionamento indisponível:', c||e2.message);
+        }
+      }
+    }
+  }catch(err){ console.warn('[Auth] ponte falhou:', err.message); }
+}
+
 /* = LOGIN = */
 
 
@@ -1180,6 +1213,7 @@ async function tryLogin(){
     }
 
     clearLoginAttempts();
+    bridgeToFirebaseAuth(user, pass); // FASE 1: provisiona no Firebase Auth (best-effort)
     completeLogin(user);
 
   }finally{
@@ -1299,6 +1333,7 @@ async function submitFirstAccess(){
       });
     }
     clearLoginAttempts();
+    bridgeToFirebaseAuth(login, p1); // FASE 1: provisiona no Firebase Auth
     completeLogin(login);
   }catch(e){
     err.textContent='Erro ao salvar: '+e.message;
@@ -1391,6 +1426,7 @@ async function submitResetPassword(){
     }catch(e){ console.warn('Firebase update failed:', e.message); }
   }
 
+  bridgeToFirebaseAuth(login, p1); // FASE 1: mantém a senha no Firebase Auth em dia
   _resetCode=null; _resetCodeTs=null; _resetTargetLogin=null;
   alert('✅ Senha redefinida com sucesso! Faça login com a nova senha.');
   showLoginScreen();
