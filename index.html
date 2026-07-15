@@ -1352,6 +1352,10 @@ function logout(){
   }
   sessionStorage.removeItem('hps_user');
   currentUser=null;
+  // Encerrar a sessão do Firebase Auth (senão o usuário segue autenticado)
+  if(fbAuth){ try{ fbAuth.signOut(); }catch(e){ console.warn('signOut:', e.message); } }
+  // Limpar estado da troca de senha
+  _pwChangeUser=null; _pwChangeMandatory=false;
   // Resetar campo auditor
   const a=$('auditor');
   if(a){a.value='';a.readOnly=false;a.style.background='';a.style.color='';a.style.cursor='';}
@@ -1373,6 +1377,7 @@ function logout(){
   if($('loginUser'))$('loginUser').value='';
   if($('loginPass'))$('loginPass').value='';
   if($('loginErr'))$('loginErr').textContent='';
+  showLoginScreen(); // garante que a tela exibida é a de login (e não a de troca de senha)
   show('sobre', $('tab-sobre'));
 }
 
