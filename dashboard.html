@@ -43,6 +43,11 @@ body.dark .kpi,body.dark .chart,body.dark .eq-card{background:var(--card)}
 body.dark th{background:var(--soft)}
 .theme-toggle{border:1.5px solid var(--line);background:var(--card);border-radius:10px;width:38px;height:38px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;transition:.2s;box-shadow:0 2px 10px rgba(12,32,58,.15)}
 .theme-toggle:hover{background:var(--soft)}
+/* === MOSTRAR/OCULTAR SENHA === */
+.pw-wrap{position:relative}
+.pw-wrap input{padding-right:46px!important}
+.pw-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:5px 7px;border-radius:7px;opacity:.55;transition:.15s;font-family:inherit}
+.pw-eye:hover{opacity:1;background:var(--soft)}
 .logo-img{background:var(--logo-bg);padding:4px 8px;border-radius:10px;transition:background-color .2s}
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--ink);font-family:'DM Sans',system-ui,sans-serif;font-size:14px;line-height:1.6}
@@ -142,7 +147,7 @@ tr:last-child td{border-bottom:none}
     </div>
     <div style="margin-bottom:16px">
       <label style="display:block;font-size:12px;font-weight:700;color:var(--navy);margin-bottom:5px">Senha</label>
-      <input id="dashPass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')dashLogin()" style="width:100%;border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;box-sizing:border-box">
+      <div class="pw-wrap"><input id="dashPass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')dashLogin()" style="width:100%;border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;box-sizing:border-box"><button type="button" class="pw-eye" data-for="dashPass" title="Mostrar senha" onclick="togglePw('dashPass',this)">👁</button></div>
     </div>
     <button onclick="dashLogin()" id="dashLoginBtn" style="width:100%;background:var(--blue);color:#fff;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:800;cursor:pointer;font-family:'DM Sans',sans-serif">Entrar</button>
     <div id="dashAuthErr" style="color:var(--red);font-size:12px;text-align:center;margin-top:10px;min-height:18px"></div>
@@ -271,6 +276,34 @@ async function bridgeToFirebaseAuth(user, pass){
       }
     }
   }catch(err){ console.warn('[Auth] ponte falhou:', err.message); }
+}
+
+/* === MOSTRAR/OCULTAR SENHA (auto-oculta em 10s) === */
+var _pwTimers={};
+function togglePw(id, btn){
+  var el=document.getElementById(id);
+  if(!el) return;
+  var mostrar = el.type==='password';
+  el.type = mostrar ? 'text' : 'password';
+  btn.textContent = mostrar ? '🙈' : '👁';
+  btn.title = mostrar ? 'Ocultar senha' : 'Mostrar senha';
+  if(_pwTimers[id]){ clearTimeout(_pwTimers[id]); _pwTimers[id]=null; }
+  if(mostrar){
+    // volta a ocultar sozinho — evita senha exposta em tela compartilhada
+    _pwTimers[id]=setTimeout(function(){ hidePw(id); }, 10000);
+  }
+  try{ el.focus(); }catch(e){}
+}
+function hidePw(id){
+  var el=document.getElementById(id);
+  if(el) el.type='password';
+  var btn=document.querySelector('.pw-eye[data-for="'+id+'"]');
+  if(btn){ btn.textContent='👁'; btn.title='Mostrar senha'; }
+  if(_pwTimers[id]){ clearTimeout(_pwTimers[id]); _pwTimers[id]=null; }
+}
+function hideAllPw(){
+  var els=document.querySelectorAll('.pw-eye');
+  for(var i=0;i<els.length;i++){ hidePw(els[i].getAttribute('data-for')); }
 }
 
 /* === MINIMIZAR PAINÉIS === */
@@ -1562,6 +1595,7 @@ async function renderAuditoresPanel(online){
   };
 
   function showDashLogin(){
+    hideAllPw();
     const overlay=document.getElementById('loginOverlay');
     if(overlay) overlay.style.display='flex';
     setTimeout(function(){ const u=document.getElementById('dashUser'); if(u) u.focus(); },100);
