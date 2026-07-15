@@ -1111,38 +1111,10 @@ function initFirebase(){
   }catch(e){console.warn('Firebase não inicializado:',e.message);}
 }
 
-/* === FIREBASE AUTH — FASE 1 (PONTE) ===
-   Provisiona cada usuário no Firebase Auth SEM alterar o login legado.
-   Identidade sintética baseada no username (preserva toda a lógica atual).
-   Tudo best-effort: qualquer falha aqui NUNCA bloqueia o login. */
+/* Identidade sintética: o auditor digita só o username;
+   o app acrescenta o domínio para o Firebase Auth. */
 const AUTH_EMAIL_DOMAIN='comissaohps.local';
 function authEmail(user){ return String(user).toLowerCase()+'@'+AUTH_EMAIL_DOMAIN; }
-
-async function bridgeToFirebaseAuth(user, pass){
-  try{
-    initFirebase();
-    if(!fbAuth) return;
-    const email=authEmail(user);
-    try{
-      await fbAuth.signInWithEmailAndPassword(email, pass);
-      // conta já existe e a senha confere — nada a fazer
-    }catch(e){
-      try{
-        await fbAuth.createUserWithEmailAndPassword(email, pass);
-        console.info('[Auth] usuário provisionado no Firebase Auth:', user);
-      }catch(e2){
-        const c=(e2&&e2.code)||'';
-        if(c==='auth/email-already-in-use'){
-          console.warn('[Auth] conta existe mas senha diverge para', user, '(reconciliar no corte)');
-        }else if(c==='auth/operation-not-allowed'){
-          console.warn('[Auth] habilite o provedor E-mail/Senha no console para provisionar');
-        }else{
-          console.warn('[Auth] provisionamento indisponível:', c||e2.message);
-        }
-      }
-    }
-  }catch(err){ console.warn('[Auth] ponte falhou:', err.message); }
-}
 
 /* = LOGIN = */
 
@@ -2985,8 +2957,12 @@ function sendToSheets(record){
     }else if(parsed.status==='unauthorized'){
       console.warn('⚠️ Não autorizado — sessão expirada.');
       alert('Sua sessão expirou. Faça login novamente para salvar.');
+    }else if(parsed.status==='forbidden'){
+      console.warn('⛔ Recusado pelo servidor:',parsed.message);
+      alert('⛔ '+(parsed.message||'Você não tem permissão para alterar esta auditoria.'));
     }else{
       console.warn('⚠️ Resposta inesperada do Apps Script:',parsed);
+      alert('Não foi possível salvar: '+(parsed.message||'erro desconhecido'));
     }
   }).catch(err=>{
     console.error('❌ Erro ao enviar ao Google Sheets:',err);
