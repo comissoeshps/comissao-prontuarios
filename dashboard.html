@@ -177,11 +177,26 @@ tr:last-child td{border-bottom:none}
 <script>const SHEETS_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbxwU5uzBEIf0VGrghwe-n1JUuDTW-cR4FDYwItSWoOXvzN5TjCBe_skre2nLGzRCyDp7g/exec';
 
 /* === API AUTENTICADA (Fase 2c) === */
+/* Espera o Firebase restaurar a sessão (é assíncrono no reload) */
+function waitForAuth(){
+  return new Promise(function(resolve){
+    try{
+      initFirebase();
+      if(!fbAuth) return resolve(null);
+      if(fbAuth.currentUser) return resolve(fbAuth.currentUser);
+      var done=false, unsub=null;
+      var finish=function(u){ if(done) return; done=true; try{ if(unsub) unsub(); }catch(e){} resolve(u||null); };
+      unsub=fbAuth.onAuthStateChanged(function(u){ finish(u); });
+      setTimeout(function(){ finish(fbAuth.currentUser); }, 8000);
+    }catch(e){ resolve(null); }
+  });
+}
+
 async function getIdToken(){
   try{
-    if(typeof initFirebase==='function') initFirebase();
-    if(typeof fbAuth==='undefined' || !fbAuth || !fbAuth.currentUser) return null;
-    return await fbAuth.currentUser.getIdToken();
+    const u=await waitForAuth();
+    if(!u) return null;
+    return await u.getIdToken();
   }catch(e){ console.warn('[API] token indisponível:', e.message); return null; }
 }
 
@@ -203,7 +218,6 @@ async function apiCall(action, payload){
     return {status:'error', message:'Erro de conexão.'};
   }
 }
-const SENHA='comissao2025';
 
 /* === FIREBASE CONFIG === */
 const FB_CONFIG={
@@ -1294,10 +1308,19 @@ async function renderAuditoresPanel(online){
 
   // Verificar sessão existente
   if(sessionStorage.getItem(SESSION_KEY)==='ok'){
-    document.getElementById('loginOverlay').style.display='none';
-    dash();
-    setTimeout(initAuditoresPanel, 500);
-    startDashInactivity();
+    // Espera o Firebase restaurar a sessão antes de chamar a API
+    waitForAuth().then(function(u){
+      if(!u){
+        sessionStorage.removeItem(SESSION_KEY);
+        sessionStorage.removeItem('hps_dash_user');
+        showDashLogin();
+        return;
+      }
+      document.getElementById('loginOverlay').style.display='none';
+      dash();
+      setTimeout(initAuditoresPanel, 500);
+      startDashInactivity();
+    });
   } else {
     showDashLogin();
   }
