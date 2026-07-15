@@ -530,7 +530,7 @@ async function loadFromSheets(){
   }
 }
 
-let current={}, data=[], charts=[];
+let current={}, data=[], charts=[], filteredData=[];
 function $(id){return document.getElementById(id)}
 function load(){try{data=JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){data=[]}}
 function persist(){localStorage.setItem(KEY,JSON.stringify(data))}
@@ -785,6 +785,12 @@ function dashApply(){
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
       <h2>Base de prontuários auditados</h2><button class="export" onclick="exportCSV()"> Exportar CSV</button>
     </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+      <input id="attSearch" type="text" placeholder="Consultar nº de atendimento (ex.: 2025/123456)" onkeydown="if(event.key==='Enter')searchAttendance()" style="flex:1;min-width:220px;border:1.5px solid var(--line);border-radius:10px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:var(--card);color:var(--ink);outline:none">
+      <button class="export" onclick="searchAttendance()">🔍 Consultar</button>
+      <button class="secondary" onclick="showAttendanceDetail(null)">Limpar</button>
+      <span style="font-size:11px;color:var(--muted)">ou clique em qualquer linha da tabela</span>
+    </div>
     <div id="attendanceDetail" style="display:none;margin-bottom:18px"></div>
     <div class="tablewrap"><table><thead><tr><th>Data</th><th>Atendimento</th><th>Setor</th><th>Tipo Int.</th><th>Prontuário</th><th>Auditor</th><th>Dias</th><th>Desfecho</th><th>Conf.</th></tr></thead><tbody>
     ${arr.map(r=>{
@@ -825,6 +831,180 @@ function dashApply(){
   if(byAuditor.length){
     const aColors=byAuditor.map(a=>a.score>=90?'rgba(23,138,74,.8)':a.score>=75?'rgba(199,138,20,.8)':'rgba(199,54,47,.8)');
     mkChart('cAuditor','bar',byAuditor.map(a=>a.k),[{data:byAuditor.map(a=>a.n),backgroundColor:aColors,borderRadius:6,label:'Auditorias'}],{indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' '+ctx.raw+' auditoria(s)'}}},scales:{x:{beginAtZero:true,ticks:{stepSize:1},title:{display:true,text:'N de auditorias'}}}});
+  }
+  renderMultiInline();   // <- painel multiprofissional (antes ficava vazio)
+  addPanelToggles();
+}
+
+/* === CONSULTA DE ATENDIMENTO AUDITADO + ANEXOS === */
+function escapeHtml(s){
+  return String(s==null?'':s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function ansBadge(v){
+  const l=label(v);
+  if(l==='sim') return '<span style="background:#E8F7EF;color:var(--green);border-radius:6px;padding:2px 9px;font-size:11px;font-weight:800">SIM</span>';
+  if(l==='não') return '<span style="background:#FDEEEE;color:var(--red);border-radius:6px;padding:2px 9px;font-size:11px;font-weight:800">NÃO</span>';
+  if(l==='N/A') return '<span style="background:#FDF4E3;color:var(--amber);border-radius:6px;padding:2px 9px;font-size:11px;font-weight:800">N/A</span>';
+  return '<span style="color:var(--muted);font-size:11px">— não respondido</span>';
+}
+
+function itemsTable(titulo, linhas){
+  if(!linhas.length) return '';
+  return '<div style="margin-top:14px">'
+    +'<div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">'+titulo+'</div>'
+    +'<table style="width:100%;border-collapse:collapse">'
+    +linhas.map(function(l){
+      return '<tr>'
+        +'<td style="padding:6px 8px;border-bottom:1px solid var(--soft);font-size:12.5px;color:var(--ink);vertical-align:top">'+l.txt+'</td>'
+        +'<td style="padding:6px 8px;border-bottom:1px solid var(--soft);text-align:right;white-space:nowrap;vertical-align:top">'+l.badge+'</td>'
+        +'</tr>';
+    }).join('')
+    +'</table></div>';
+}
+
+function searchAttendance(){
+  const el=document.getElementById('attSearch');
+  const v=el?el.value.trim():'';
+  if(!v){ showAttendanceDetail(null); return; }
+  const matches=data.filter(function(r){ return String(r.attendance||'').trim()===v; });
+  if(!matches.length){
+    const box=document.getElementById('attendanceDetail');
+    box.style.display='block';
+    box.innerHTML='<div style="border:1px solid var(--line);border-radius:12px;padding:16px;background:var(--soft);font-size:13px;color:var(--muted)">Nenhuma auditoria encontrada para o atendimento <b>'+escapeHtml(v)+'</b>.</div>';
+    return;
+  }
+  showAttendanceDetail(matches[matches.length-1]);
+}
+
+function showAttendanceDetail(rec){
+  const box=document.getElementById('attendanceDetail');
+  if(!box) return;
+  if(!rec){ box.style.display='none'; box.innerHTML=''; return; }
+
+  const s=score(rec);
+  const sf=scoreFisico([rec]);
+  const cor=s.pct>=90?'var(--green)':s.pct>=75?'var(--amber)':'var(--red)';
+  const tp=(rec.tipoProntuario||'online').toLowerCase();
+  const tpLabel=tp==='fisico'?'Físico':tp==='ambos'?'Ambos':'Online';
+
+  const meta=[
+    ['Atendimento', rec.attendance],
+    ['Data', rec.date],
+    ['Setor', rec.sector],
+    ['Auditor', rec.auditor],
+    ['Tipo de internação', rec.tipoInt],
+    ['Dias de internação', rec.diasIntern],
+    ['Desfecho', rec.desfecho],
+    ['Tipo de prontuário', tpLabel]
+  ].map(function(p){
+    return '<div><div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">'+p[0]+'</div>'
+      +'<div style="font-size:13px;font-weight:700;color:var(--ink)">'+escapeHtml(p[1]||'—')+'</div></div>';
+  }).join('');
+
+  const online=ITEMS.map(function(i){
+    return {txt:'<b style="font-family:\'DM Mono\',monospace;color:var(--muted)">'+i.num+'.</b> '+escapeHtml(i.text), badge:ansBadge(rec.answers[i.num])};
+  });
+
+  const fisico=(tp==='fisico'||tp==='ambos')?ITEMS_FISICO.map(function(i){
+    return {txt:'<b style="font-family:\'DM Mono\',monospace;color:var(--muted)">F'+i.num+'.</b> '+escapeHtml(i.text), badge:ansBadge((rec.fisAnswers||{})[i.num])};
+  }):[];
+
+  const multiLbls={
+    fisio_presenca:'Fisioterapia — Presença em evolução',
+    fisio_metas:'Fisioterapia — Metas motoras/desmame O₂',
+    nutri_presenca:'Nutrição — Presença em evolução',
+    nutri_aval48h:'Nutrição — Avaliação nutricional 48h',
+    nutri_reaval:'Nutrição — Reavaliação nutricional diária',
+    fono_presenca:'Fonoaudiologia — Presença em evolução',
+    fono_deglut:'Fonoaudiologia — Avaliação de deglutição',
+    farma_presenca:'Farmácia — Presença em evolução',
+    farma_interacao:'Farmácia — Interação medicamentosa',
+    farma_reconcil:'Farmácia — Reconciliação medicamentosa'
+  };
+  const multi=allMultiKeys().map(function(k){
+    return {txt:escapeHtml(multiLbls[k]||k), badge:ansBadge(rec.answers[k])};
+  });
+
+  const obs=rec.observacoes
+    ? '<div style="margin-top:14px"><div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px">Observações</div>'
+      +'<div style="background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.5;white-space:pre-wrap">'+escapeHtml(rec.observacoes)+'</div></div>'
+    : '';
+
+  box.style.display='block';
+  box.innerHTML=
+     '<div style="border:1.5px solid var(--blue);border-radius:14px;padding:18px;background:var(--card)">'
+    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px">'
+    +'  <div><h3 style="font-size:15px;font-weight:900;color:var(--navy)">Atendimento '+escapeHtml(rec.attendance||'—')+'</h3>'
+    +'  <div style="font-size:12px;color:var(--muted)">Detalhe completo da auditoria</div></div>'
+    +'  <div style="text-align:right"><div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase">Conformidade</div>'
+    +'  <div style="font-size:26px;font-weight:900;font-family:\'DM Mono\',monospace;color:'+cor+';line-height:1">'+s.pct+'%</div>'
+    +'  <div style="font-size:11px;color:var(--muted)">'+s.sim+' sim · '+s.nao+' não · '+s.na+' N/A</div></div>'
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:12px;background:var(--soft);border-radius:10px">'+meta+'</div>'
+    +'<div style="margin-top:16px"><div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">📎 Arquivos anexados</div>'
+    +'<div id="attAnexos" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center"></div></div>'
+    +obs
+    +itemsTable('Itens do prontuário online ('+ITEMS.length+')', online)
+    +(fisico.length?itemsTable('Itens do prontuário físico ('+ITEMS_FISICO.length+') — conformidade '+(sf.app?sf.pct+'%':'—'), fisico):'')
+    +itemsTable('Equipe multiprofissional', multi)
+    +'<div style="text-align:right;margin-top:14px"><button class="secondary" onclick="showAttendanceDetail(null)">Fechar</button></div>'
+    +'</div>';
+
+  try{ box.scrollIntoView({behavior:'smooth',block:'nearest'}); }catch(e){}
+  loadAnexosFor(rec.attendance);
+}
+
+async function loadAnexosFor(att){
+  const el=document.getElementById('attAnexos');
+  if(!el) return;
+  el.innerHTML='<span style="color:var(--muted);font-size:12px">Carregando anexos…</span>';
+  try{
+    const json=await apiCall('listAnexos',{atendimento:att});
+    if(json.status!=='ok'){
+      el.innerHTML='<span style="color:var(--red);font-size:12px">Não foi possível carregar os anexos: '+escapeHtml(json.message||'')+'</span>';
+      return;
+    }
+    const rows=json.rows||[];
+    if(!rows.length){
+      el.innerHTML='<span style="color:var(--muted);font-size:12px">Nenhum arquivo anexado a este atendimento.</span>';
+      return;
+    }
+    el.innerHTML=rows.map(function(a){
+      const nome=String(a.nome_arquivo||'arquivo');
+      const isImg=String(a.tipo||'').indexOf('image')!==-1;
+      const quem=a.auditor?' · '+escapeHtml(String(a.auditor)):'';
+      return '<button type="button" onclick="abrirAnexo(\''+escapeHtml(String(a.file_id||''))+'\')" title="'+escapeHtml(nome)+quem+'" '
+        +'style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:5px 10px;font-size:12px;color:var(--navy);font-weight:700;font-family:inherit">'
+        +'<span>'+(isImg?'🖼':'📄')+'</span><span style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(nome)+'</span></button>';
+    }).join('');
+  }catch(e){
+    el.innerHTML='<span style="color:var(--red);font-size:12px">Erro ao carregar anexos.</span>';
+  }
+}
+
+async function abrirAnexo(fileId){
+  if(!fileId){ alert('Anexo sem identificador.'); return; }
+  try{
+    const json=await apiCall('getFile',{fileId:fileId});
+    if(json.status!=='ok'){
+      alert(json.status==='unauthorized' ? 'Sessão expirada. Faça login novamente.' : ('Não foi possível abrir o anexo: '+(json.message||'')));
+      return;
+    }
+    const bin=atob(json.data);
+    const bytes=new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+    const blob=new Blob([bytes],{type:json.mimeType||'application/octet-stream'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download=json.filename||'anexo';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 30000);
+  }catch(e){
+    console.error('[ANEXO]', e);
+    alert('Erro ao abrir o anexo.');
   }
 }
 
