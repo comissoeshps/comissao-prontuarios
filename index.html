@@ -2231,7 +2231,7 @@ function listenChat(){
   if(_chatListener){
     try{ fbDB.ref(_chatListener.path).off('child_added', _chatListener.fn); }catch(e){}
   }
-  const channel = _currentConvId || 'chat_grupo';
+  const channel = chatPath();
   const fn = snap=>{
     appendChatMsg(snap.val());
     if(!_chatWindowOpen || _chatMinimized) incrementUnread();
@@ -2268,6 +2268,13 @@ function appendChatMsg(msg){
 
 function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
+/* Caminho real das mensagens no banco.
+   Antes gravava na RAIZ (ex.: /gabrielcm_julianocar), que as regras negam.
+   Agora fica sob chat_privado/<canal>, como as regras esperam. */
+function chatPath(){
+  return _currentConvId ? ('chat_privado/'+_currentConvId) : 'chat_grupo';
+}
+
 /* ── Enviar mensagem ── */
 function sendChatMsg(){
   if(!fbDB || !currentUser) return;
@@ -2275,7 +2282,7 @@ function sendChatMsg(){
   const text = (input?.value||'').trim();
   if(!text || !_currentConvId) return;
   const msg = { type:'text', login:currentUser.login, name:currentUser.name, text, ts:Date.now() };
-  fbDB.ref(_currentConvId).push(msg);
+  fbDB.ref(chatPath()).push(msg);
   saveConvMeta(_currentConvId, document.getElementById('convAreaTitle')?.textContent||'', text);
   input.value = '';
   input.style.height = 'auto';
