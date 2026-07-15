@@ -175,6 +175,34 @@ tr:last-child td{border-bottom:none}
 </main>
 
 <script>const SHEETS_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbxwU5uzBEIf0VGrghwe-n1JUuDTW-cR4FDYwItSWoOXvzN5TjCBe_skre2nLGzRCyDp7g/exec';
+
+/* === API AUTENTICADA (Fase 2c) === */
+async function getIdToken(){
+  try{
+    if(typeof initFirebase==='function') initFirebase();
+    if(typeof fbAuth==='undefined' || !fbAuth || !fbAuth.currentUser) return null;
+    return await fbAuth.currentUser.getIdToken();
+  }catch(e){ console.warn('[API] token indisponível:', e.message); return null; }
+}
+
+async function apiCall(action, payload){
+  const token=await getIdToken();
+  if(!token){ return {status:'unauthorized', message:'Sessão expirada. Faça login novamente.'}; }
+  const body=Object.assign({}, payload||{}, {action:action, idToken:token});
+  try{
+    const resp=await fetch(SHEETS_WEBAPP_URL,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify(body)
+    });
+    const text=await resp.text();
+    try{ return JSON.parse(text); }
+    catch(e){ console.warn('[API] resposta não-JSON:', text.slice(0,200)); return {status:'error', message:'Resposta inválida do servidor.'}; }
+  }catch(e){
+    console.error('[API] falha de rede:', e);
+    return {status:'error', message:'Erro de conexão.'};
+  }
+}
 const SENHA='comissao2025';
 
 /* === FIREBASE CONFIG === */
@@ -475,8 +503,7 @@ async function loadFromSheets(){
     return;
   }
   try{
-    const res=await fetch(SHEETS_WEBAPP_URL+'?action=list');
-    const json=await res.json();
+    const json=await apiCall('list');
     if(json.status==='ok'&&Array.isArray(json.rows)){
       data=json.rows.map(rowToRecord);
     }else{
@@ -1194,8 +1221,7 @@ async function renderAuditoresPanel(online){
   // Buscar atividade de hoje
   let atividadeHoje={};
   try{
-    const res=await fetch(SHEETS_WEBAPP_URL+'?action=list');
-    const json=await res.json();
+    const json=await apiCall('list');
     if(json.status==='ok' && json.rows){
       const agora=new Date(new Date().toLocaleString('en-US',{timeZone:'America/Sao_Paulo'}));
       const hojeStr=agora.getFullYear()+'-'+String(agora.getMonth()+1).padStart(2,'0')+'-'+String(agora.getDate()).padStart(2,'0');
