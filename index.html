@@ -813,6 +813,60 @@ tr:hover td{background:#FAFCFF}
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script>
 const SHEETS_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbxwU5uzBEIf0VGrghwe-n1JUuDTW-cR4FDYwItSWoOXvzN5TjCBe_skre2nLGzRCyDp7g/exec';
+
+/* === Abrir anexo privado (Fase 2d) === */
+async function abrirAnexo(fileId){
+  if(!fileId){ alert('Anexo sem identificador.'); return; }
+  try{
+    const json=await apiCall('getFile',{fileId:fileId});
+    if(json.status!=='ok'){
+      alert(json.status==='unauthorized' ? 'Sessão expirada. Faça login novamente.' : ('Não foi possível abrir o anexo: '+(json.message||'')));
+      return;
+    }
+    const bin=atob(json.data);
+    const bytes=new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+    const blob=new Blob([bytes],{type:json.mimeType||'application/octet-stream'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download=json.filename||'anexo';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 30000);
+  }catch(e){
+    console.error('[ANEXO]', e);
+    alert('Erro ao abrir o anexo.');
+  }
+}
+
+/* === API AUTENTICADA (Fase 2c) ===
+   Toda chamada ao Apps Script leva o ID token do Firebase Auth.
+   Sem sessão válida, nem tenta. */
+async function getIdToken(){
+  try{
+    if(typeof initFirebase==='function') initFirebase();
+    if(!fbAuth || !fbAuth.currentUser) return null;
+    return await fbAuth.currentUser.getIdToken();
+  }catch(e){ console.warn('[API] token indisponível:', e.message); return null; }
+}
+
+async function apiCall(action, payload){
+  const token=await getIdToken();
+  if(!token){ return {status:'unauthorized', message:'Sessão expirada. Faça login novamente.'}; }
+  const body=Object.assign({}, payload||{}, {action:action, idToken:token});
+  try{
+    const resp=await fetch(SHEETS_WEBAPP_URL,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify(body)
+    });
+    const text=await resp.text();
+    try{ return JSON.parse(text); }
+    catch(e){ console.warn('[API] resposta não-JSON:', text.slice(0,200)); return {status:'error', message:'Resposta inválida do servidor.'}; }
+  }catch(e){
+    console.error('[API] falha de rede:', e);
+    return {status:'error', message:'Erro de conexão.'};
+  }
+}
 const KEY='comissao_data';
 const SETORES=["Pronto Atendimento Adulto","Pronto Atendimento Infantil","Pronto Atendimento Obstétrico","Pediatria Internação (2° andar)","Cirurgia Pediátrica","Cirurgia Adulto","UTI Cardiológica","UTI Adulto","UTI Neonatal","UTI Pediátrica","Clínica Médica (4° e 6° andar)","Clínica Cirúrgica","Maternidade"];
 const AUDITORES=["Amanda Helena Miguel","Ana Beatriz Souza Gonçalves","Ariovaldo Silva Junior","Erli Teresinha Marques","Fernanda Rampazzo Sena Pavini","Gabriel Cruvinel Macor","Iara Cristina Bueno","Juliano César Alves Reis","Larissa Peixoto Lopes","Matheus Magalhães","Orlando De Jesus Junior","Raiene Camargo Mlaker Gonçalves","Rodrigo Facundes Silva","Sueh Pereira Cordeiro","Telma Batista dos Santos Raze"];
@@ -1765,18 +1819,16 @@ async function loadMyAuditorias(){
   }
   try{
     // Buscar auditorias e anexos em paralelo
-    const [resAud, resAnex] = await Promise.all([
-      fetch(SHEETS_WEBAPP_URL+'?action=list'),
-      fetch(SHEETS_WEBAPP_URL+'?action=listAnexos').catch(()=>null)
+    const [json, jsonAnex] = await Promise.all([
+      apiCall('list'),
+      apiCall('listAnexos').catch(()=>null)
     ]);
-    const json=await resAud.json();
     if(json.status!=='ok') return;
 
     // Mapear anexos por número de atendimento (apenas do auditor atual)
     let anexosByAtt={};
-    if(resAnex){
+    if(jsonAnex){
       try{
-        const jsonAnex=await resAnex.json();
         if(jsonAnex.status==='ok' && jsonAnex.rows){
           jsonAnex.rows
             .filter(a=>String(a.auditor||'').trim()===currentUser.name)
@@ -1825,13 +1877,12 @@ async function loadMyAuditorias(){
         if(anexos.length>0){
           const itens=anexos.map(function(a){
             var isImg=String(a.tipo||'').includes('image');
-            var iconHtml=isImg && a.thumbnail_url
-              ?'<img src="'+a.thumbnail_url+'" style="width:28px;height:28px;object-fit:cover;border-radius:4px">'
-              :'<span>'+(isImg?'🖼':'📄')+'</span>';
-            return '<a href="'+a.url+'" target="_blank" title="'+a.nome_arquivo+'" style="display:inline-flex;align-items:center;gap:5px;text-decoration:none;background:var(--soft);border:1px solid var(--line);border-radius:7px;padding:3px 8px 3px 4px;font-size:11px;color:var(--navy);font-weight:600">'
-              +iconHtml
-              +'<span style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+String(a.nome_arquivo||'arquivo').substring(0,30)+'</span>'
-              +'</a>';
+            var nome=String(a.nome_arquivo||'arquivo');
+            // 2d: arquivo é privado — baixado sob demanda via API autenticada
+            return '<button type="button" onclick="abrirAnexo(\''+escapeHtml(String(a.file_id||''))+'\')" title="'+escapeHtml(nome)+'" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;background:var(--soft);border:1px solid var(--line);border-radius:7px;padding:3px 8px 3px 4px;font-size:11px;color:var(--navy);font-weight:600;font-family:inherit">'
+              +'<span>'+(isImg?'🖼':'📄')+'</span>'
+              +'<span style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(nome.substring(0,30))+'</span>'
+              +'</button>';
           }).join('');
           anexosHtml='<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)">'
             +'<div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px">📎 Anexos ('+anexos.length+')</div>'
@@ -2165,7 +2216,7 @@ function appendChatMsg(msg){
   box.scrollTop = box.scrollHeight;
 }
 
-function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
 /* ── Enviar mensagem ── */
 function sendChatMsg(){
@@ -2252,24 +2303,17 @@ async function uploadFilesToDrive(atendimento, auditor, files){
         r.readAsDataURL(f);
       });
       console.log('[UPLOAD] Enviando para Apps Script...');
-      const resp=await fetch(SHEETS_WEBAPP_URL+'?action=upload',{
-        method:'POST',
-        headers:{'Content-Type':'text/plain;charset=utf-8'},
-        body:JSON.stringify({
-          action:'upload',
-          filename:f.name,
-          mimeType:f.type||'application/octet-stream',
-          data:b64,
-          atendimento:atendimento,
-          auditor:auditor
-        })
+      const json=await apiCall('upload',{
+        filename:f.name,
+        mimeType:f.type||'application/octet-stream',
+        data:b64,
+        atendimento:atendimento,
+        auditor:auditor
       });
-      console.log('[UPLOAD] Resposta HTTP status:', resp.status);
-      const json=await resp.json();
       console.log('[UPLOAD] Resposta JSON:', JSON.stringify(json));
       if(json.status==='ok'){
-        results.push({name:f.name,url:json.url,fileId:json.fileId,thumb:json.thumbnailUrl});
-        console.log('[UPLOAD] Sucesso! URL:', json.url);
+        results.push({name:f.name,fileId:json.fileId});
+        console.log('[UPLOAD] Sucesso! fileId:', json.fileId);
       } else {
         console.error('[UPLOAD] Erro do servidor:', json.message);
       }
@@ -2685,8 +2729,7 @@ async function checkAttendance(){
   box.innerHTML=`<div class="alert-box" style="background:#F4F7FC;border:1px solid var(--line);color:var(--muted)"><span class="ic">⏳</span><div>Verificando se este atendimento já foi auditado…</div></div>`;
 
   try{
-    const res=await fetch(SHEETS_WEBAPP_URL+'?action=list');
-    const json=await res.json();
+    const json=await apiCall('list');
     if(json.status!=='ok'||!Array.isArray(json.rows)){box.style.display='none';renderForm();return;}
 
     const matches=json.rows.filter(r=>String(r.numero_atendimento||'').trim()===att);
@@ -2879,21 +2922,14 @@ function sendToSheets(record){
     return;
   }
   const row=recordToRow(record);
-  fetch(SHEETS_WEBAPP_URL,{
-    method:'POST',
-    headers:{'Content-Type':'text/plain;charset=utf-8'},
-    body:JSON.stringify(row)
-  }).then(res=>res.text()).then(text=>{
-    console.log('Resposta do Google Sheets:',text);
-    try{
-      const parsed=JSON.parse(text);
-      if(parsed.status==='ok'){
-        console.log('✅ Linha gravada com sucesso na planilha.');
-      }else{
-        console.warn('⚠️ Resposta inesperada do Apps Script:',parsed);
-      }
-    }catch(e){
-      console.warn('⚠️ Resposta não é JSON válido (pode indicar erro de permissão/login):',text);
+  apiCall('save', row).then(parsed=>{
+    if(parsed.status==='ok'){
+      console.log('✅ Linha gravada com sucesso na planilha.');
+    }else if(parsed.status==='unauthorized'){
+      console.warn('⚠️ Não autorizado — sessão expirada.');
+      alert('Sua sessão expirou. Faça login novamente para salvar.');
+    }else{
+      console.warn('⚠️ Resposta inesperada do Apps Script:',parsed);
     }
   }).catch(err=>{
     console.error('❌ Erro ao enviar ao Google Sheets:',err);
