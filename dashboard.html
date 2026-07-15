@@ -248,35 +248,9 @@ function initFirebase(){
   }catch(e){ console.warn('Firebase init error:', e.message); }
 }
 
-/* === FIREBASE AUTH — FASE 1 (PONTE) ===
-   Provisiona o admin no Firebase Auth SEM alterar o login legado.
-   Best-effort: qualquer falha aqui NUNCA bloqueia o acesso. */
+/* Identidade sintética (mesma do coleta): o admin digita só o username. */
 const AUTH_EMAIL_DOMAIN='comissaohps.local';
 function authEmail(user){ return String(user).toLowerCase()+'@'+AUTH_EMAIL_DOMAIN; }
-async function bridgeToFirebaseAuth(user, pass){
-  try{
-    initFirebase();
-    if(!fbAuth) return;
-    const email=authEmail(user);
-    try{
-      await fbAuth.signInWithEmailAndPassword(email, pass);
-    }catch(e){
-      try{
-        await fbAuth.createUserWithEmailAndPassword(email, pass);
-        console.info('[Auth] usuário provisionado no Firebase Auth:', user);
-      }catch(e2){
-        const c=(e2&&e2.code)||'';
-        if(c==='auth/email-already-in-use'){
-          console.warn('[Auth] conta existe mas senha diverge para', user, '(reconciliar no corte)');
-        }else if(c==='auth/operation-not-allowed'){
-          console.warn('[Auth] habilite o provedor E-mail/Senha no console para provisionar');
-        }else{
-          console.warn('[Auth] provisionamento indisponível:', c||e2.message);
-        }
-      }
-    }
-  }catch(err){ console.warn('[Auth] ponte falhou:', err.message); }
-}
 
 /* === MOSTRAR/OCULTAR SENHA (auto-oculta em 10s) === */
 var _pwTimers={};
