@@ -290,6 +290,11 @@ tr:hover td{background:#FAFCFF}
 .login-field label{display:block;font-size:12px;font-weight:700;color:var(--navy);margin-bottom:5px}
 .login-field input{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;transition:.15s}
 .login-field input:focus{border-color:var(--blue)}
+/* === MOSTRAR/OCULTAR SENHA === */
+.pw-wrap{position:relative}
+.pw-wrap input{padding-right:46px!important}
+.pw-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:5px 7px;border-radius:7px;opacity:.55;transition:.15s;font-family:inherit}
+.pw-eye:hover{opacity:1;background:var(--soft)}
 .login-btn{width:100%;background:var(--blue);color:#fff;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:800;cursor:pointer;font-family:'DM Sans',sans-serif;margin-top:4px;transition:.15s}
 .login-btn:hover{background:#1558c0}
 .login-error{color:var(--red);font-size:12px;text-align:center;margin-top:8px;min-height:18px}
@@ -499,7 +504,7 @@ tr:hover td{background:#FAFCFF}
     <!-- TELA 1: Login normal -->
     <div id="loginScreen">
       <div class="login-field"><label>Usuário</label><input id="loginUser" type="text" placeholder="Ex.: João da Silva → joaods" onkeydown="tryLoginKey(event)" autocomplete="username"></div>
-      <div class="login-field"><label>Senha</label><input id="loginPass" type="password" placeholder="••••••••" onkeydown="tryLoginKey(event)" autocomplete="current-password"></div>
+      <div class="login-field"><label>Senha</label><div class="pw-wrap"><input id="loginPass" type="password" placeholder="••••••••" onkeydown="tryLoginKey(event)" autocomplete="current-password"><button type="button" class="pw-eye" data-for="loginPass" title="Mostrar senha" onclick="togglePw('loginPass',this)">👁</button></div></div>
       <button class="login-btn" onclick="tryLogin()">Entrar</button>
       <div id="loginErr" class="login-error"></div>
       <div style="text-align:center;margin-top:14px">
@@ -512,9 +517,9 @@ tr:hover td{background:#FAFCFF}
       <div id="pwChangeIntro" style="background:#EAF2FF;border-radius:10px;padding:12px 14px;font-size:12.5px;color:var(--blue);margin-bottom:16px;line-height:1.5">
         👋 Por segurança, defina sua senha pessoal para continuar.
       </div>
-      <div class="login-field" id="pwCurrentField" style="display:none"><label>Senha atual</label><input id="pwCurrent" type="password" placeholder="Senha atual" autocomplete="current-password"></div>
-      <div class="login-field"><label>Nova senha (mín. 8 caracteres)</label><input id="firstPass1" type="password" placeholder="Nova senha" autocomplete="new-password"></div>
-      <div class="login-field"><label>Confirmar nova senha</label><input id="firstPass2" type="password" placeholder="Repita a senha" autocomplete="new-password"></div>
+      <div class="login-field" id="pwCurrentField" style="display:none"><label>Senha atual</label><div class="pw-wrap"><input id="pwCurrent" type="password" placeholder="Senha atual" autocomplete="current-password"><button type="button" class="pw-eye" data-for="pwCurrent" title="Mostrar senha" onclick="togglePw('pwCurrent',this)">👁</button></div></div>
+      <div class="login-field"><label>Nova senha (mín. 8 caracteres)</label><div class="pw-wrap"><input id="firstPass1" type="password" placeholder="Nova senha" autocomplete="new-password"><button type="button" class="pw-eye" data-for="firstPass1" title="Mostrar senha" onclick="togglePw('firstPass1',this)">👁</button></div></div>
+      <div class="login-field"><label>Confirmar nova senha</label><div class="pw-wrap"><input id="firstPass2" type="password" placeholder="Repita a senha" autocomplete="new-password"><button type="button" class="pw-eye" data-for="firstPass2" title="Mostrar senha" onclick="togglePw('firstPass2',this)">👁</button></div></div>
       <button class="login-btn" onclick="submitPasswordChange()">Salvar senha</button>
       <div id="firstAccessErr" class="login-error"></div>
       <div style="text-align:center;margin-top:12px">
@@ -1151,6 +1156,7 @@ let _resetTargetLogin = null;// login do usuário que pediu reset
 
 /* Navegação entre telas */
 function showLoginScreen(){
+  hideAllPw();
   ['firstAccessScreen','forgotScreen','resetScreen'].forEach(id=>{
     const el=document.getElementById(id);
     if(el) el.style.display='none';
@@ -1290,6 +1296,34 @@ function completeLogin(user){
   afterLogin();
 }
 
+/* === MOSTRAR/OCULTAR SENHA (auto-oculta em 10s) === */
+var _pwTimers={};
+function togglePw(id, btn){
+  var el=document.getElementById(id);
+  if(!el) return;
+  var mostrar = el.type==='password';
+  el.type = mostrar ? 'text' : 'password';
+  btn.textContent = mostrar ? '🙈' : '👁';
+  btn.title = mostrar ? 'Ocultar senha' : 'Mostrar senha';
+  if(_pwTimers[id]){ clearTimeout(_pwTimers[id]); _pwTimers[id]=null; }
+  if(mostrar){
+    // volta a ocultar sozinho — evita senha exposta em tela compartilhada
+    _pwTimers[id]=setTimeout(function(){ hidePw(id); }, 10000);
+  }
+  try{ el.focus(); }catch(e){}
+}
+function hidePw(id){
+  var el=document.getElementById(id);
+  if(el) el.type='password';
+  var btn=document.querySelector('.pw-eye[data-for="'+id+'"]');
+  if(btn){ btn.textContent='👁'; btn.title='Mostrar senha'; }
+  if(_pwTimers[id]){ clearTimeout(_pwTimers[id]); _pwTimers[id]=null; }
+}
+function hideAllPw(){
+  var els=document.querySelectorAll('.pw-eye');
+  for(var i=0;i<els.length;i++){ hidePw(els[i].getAttribute('data-for')); }
+}
+
 /* === TROCA DE SENHA (Firebase Auth) === */
 let _pwChangeUser = null;
 let _pwChangeMandatory = false;
@@ -1324,6 +1358,7 @@ function showChangePasswordScreen(mandatory){
   const t=document.getElementById('loginPanelTitle'); if(t) t.textContent = mandatory ? 'Defina sua senha' : 'Trocar senha';
   const s=document.getElementById('loginPanelSub'); if(s) s.textContent='';
   ['firstPass1','firstPass2','pwCurrent'].forEach(function(id){ const el=document.getElementById(id); if(el) el.value=''; });
+  hideAllPw();
   const er=document.getElementById('firstAccessErr'); if(er) er.textContent='';
   setTimeout(function(){ const f=document.getElementById(mandatory?'firstPass1':'pwCurrent'); if(f) f.focus(); },100);
 }
