@@ -841,11 +841,26 @@ async function abrirAnexo(fileId){
 /* === API AUTENTICADA (Fase 2c) ===
    Toda chamada ao Apps Script leva o ID token do Firebase Auth.
    Sem sessão válida, nem tenta. */
+/* Espera o Firebase restaurar a sessão (é assíncrono no reload) */
+function waitForAuth(){
+  return new Promise(function(resolve){
+    try{
+      initFirebase();
+      if(!fbAuth) return resolve(null);
+      if(fbAuth.currentUser) return resolve(fbAuth.currentUser);
+      var done=false, unsub=null;
+      var finish=function(u){ if(done) return; done=true; try{ if(unsub) unsub(); }catch(e){} resolve(u||null); };
+      unsub=fbAuth.onAuthStateChanged(function(u){ finish(u); });
+      setTimeout(function(){ finish(fbAuth.currentUser); }, 8000);
+    }catch(e){ resolve(null); }
+  });
+}
+
 async function getIdToken(){
   try{
-    if(typeof initFirebase==='function') initFirebase();
-    if(!fbAuth || !fbAuth.currentUser) return null;
-    return await fbAuth.currentUser.getIdToken();
+    const u=await waitForAuth();
+    if(!u) return null;
+    return await u.getIdToken();
   }catch(e){ console.warn('[API] token indisponível:', e.message); return null; }
 }
 
