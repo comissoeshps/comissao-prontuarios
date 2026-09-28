@@ -1148,19 +1148,31 @@ async function apiCall(action, payload){
   const token=await getIdToken();
   if(!token){ return {status:'unauthorized', message:'Sessão expirada. Faça login novamente.'}; }
   const body=Object.assign({}, payload||{}, {action:action, idToken:token});
-  try{
-    const resp=await fetch(SHEETS_WEBAPP_URL,{
-      method:'POST',
-      headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body:JSON.stringify(body)
-    });
-    const text=await resp.text();
-    try{ return JSON.parse(text); }
-    catch(e){ console.warn('[API] resposta não-JSON:', text.slice(0,200)); return {status:'error', message:'Resposta inválida do servidor.'}; }
-  }catch(e){
-    console.error('[API] falha de rede:', e);
-    return {status:'error', message:'Erro de conexão.'};
+  // Navegadores sem os cookies do Google (aba anônima / 1º acesso do perfil) podem rebaixar
+  // o POST para GET ao seguir o redirect 302 do Apps Script; a resposta então vem do doGet
+  // ("Use POST com idToken. Leituras via GET foram desativadas."). Essa mensagem PROVA que o
+  // doPost NÃO executou — repetir é seguro, inclusive para gravações: nada ocorreu no servidor.
+  for(let attempt=0; attempt<3; attempt++){
+    if(attempt>0) await new Promise(function(r){ setTimeout(r, 400*attempt); });
+    try{
+      const resp=await fetch(SHEETS_WEBAPP_URL,{
+        method:'POST',
+        headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body:JSON.stringify(body)
+      });
+      const text=await resp.text();
+      let json;
+      try{ json=JSON.parse(text); }
+      catch(e){ console.warn('[API] resposta não-JSON:', text.slice(0,200)); return {status:'error', message:'Resposta inválida do servidor.'}; }
+      const getDowngrade = json && json.status==='unauthorized' && /Use POST com idToken/i.test(String(json.message||''));
+      if(!getDowngrade) return json;
+      console.warn('[API] POST rebaixado para GET pelo redirect do Apps Script (tentativa '+(attempt+1)+'/3) — repetindo…');
+    }catch(e){
+      console.error('[API] falha de rede:', e);
+      return {status:'error', message:'Erro de conexão.'};
+    }
   }
+  return {status:'error', message:'Falha de comunicação com o Google (redirect rebaixou o POST). Recarregue a página e tente novamente.'};
 }
 const KEY='comissao_data';
 const SETORES=["Pronto Atendimento Adulto","Pronto Atendimento Infantil","Pronto Atendimento Obstétrico","Pediatria Internação (2° andar)","Cirurgia Pediátrica","Cirurgia Adulto","UTI Cardiológica","UTI Adulto","UTI Neonatal","UTI Pediátrica","Clínica Médica (4° e 6° andar)","Clínica Cirúrgica","Maternidade"];
