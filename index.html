@@ -513,6 +513,7 @@ tr:hover td{background:#FAFCFF}
     <button class="tab" id="tab-resultados" onclick="abrirResultados(this)" style="display:none">Resultados</button>
     <button class="tab" id="tab-epidemio" onclick="abrirPerfilEpidemiologico(this)" style="display:none">Banco de Dados</button>
     <button class="tab" id="tab-sair" onclick="logout()" style="color:var(--red);display:none">Sair</button>
+    <button class="tab" id="tab-cem" onclick="window.location.href='https://comissoeshps.github.io/comissao-etica-medica/'">Comissão de Ética Médica</button>
   </nav>
 </div>
 </header>
@@ -1516,6 +1517,8 @@ function clearInactivityTimer(){
 function updateColetaTabLabel(){
   var t=document.getElementById('tab-coleta');
   if(t) t.textContent = currentUser ? 'Iniciar Auditoria' : 'Login';
+  var cem=document.getElementById('tab-cem');
+  if(cem) cem.style.display = currentUser ? 'none' : 'flex';
 }
 function completeLogin(user){
   clearLoginAttempts();
