@@ -1734,7 +1734,7 @@ const USUARIOS_DASH={
   amandahm:'Amanda Helena Miguel',
   anabsg:'Ana Beatriz Souza Gonçalves',
   edilsonmb:'Edilson Moreira Borges',
-  erlitm:'Erli Teresinha Marques',
+  ericadm:'Érica David Martins',
   fernandarsp:'Fernanda Rampazzo Sena Pavini',
   gabrielcm:'Gabriel Cruvinel Macor',
   iaracb:'Iara Cristina Bueno',
@@ -1754,6 +1754,18 @@ function initAuditoresPanel(){
   fbDB.ref('online').on('value', function(snap){
     renderAuditoresPanel(snap.val()||{});
   });
+  // Lista de membros (gerenciada na Página Inicial do index): substitui a lista fixa quando existir.
+  // Falha ou nó vazio = mantém USUARIOS_DASH acima como reserva.
+  fbDB.ref('membros').on('value', function(snap){
+    var db=snap.val();
+    if(!db || !Object.keys(db).length) return;
+    var novos={};
+    Object.keys(db).forEach(function(l){ var m=db[l]; if(m && m.ativo!==false && m.nome) novos[l]=String(m.nome); });
+    if(!Object.keys(novos).length) return;
+    Object.keys(USUARIOS_DASH).forEach(function(k){ delete USUARIOS_DASH[k]; });
+    Object.keys(novos).forEach(function(k){ USUARIOS_DASH[k]=novos[k]; });
+    renderAuditoresPanel(null);
+  }, function(e){ console.warn('[membros] dashboard usando lista fixa:', e && e.message); });
   // Escutar mudanças em /auth para atualizar último acesso em tempo real
   fbDB.ref('auth').on('value', function(snap){
     renderAuditoresPanel(null); // null = manter online atual, só recarregar auth

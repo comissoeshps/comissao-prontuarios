@@ -573,9 +573,10 @@ tr:hover td{background:#FAFCFF}
   <div class="panel">
     <div class="panel-head">
       <h2>Composição da comissão</h2>
+      <button id="membrosAdminBtn" onclick="membrosAdminToggle()" style="display:none;border:1.5px solid var(--blue);background:transparent;border-radius:10px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;color:var(--blue);font-family:'DM Sans',sans-serif">&#128101; Gerenciar membros</button>
     </div>
 
-    <div class="role-grid">
+    <div class="role-grid" id="rosterRoles">
       <div class="role-card">
         <div class="role-title">Presidente</div>
         <div class="role-name">Gabriel Cruvinel Macor</div>
@@ -592,11 +593,11 @@ tr:hover td{background:#FAFCFF}
 
     <div class="members-card">
       <div class="role-title">Membros efetivos</div>
-      <div class="members-grid">
+      <div class="members-grid" id="rosterMembers">
         <div class="member">Amanda Helena Miguel</div>
         <div class="member">Ana Beatriz Souza Gonçalves</div>
         <div class="member">Edilson Moreira Borges</div>
-        <div class="member">Erli Teresinha Marques</div>
+        <div class="member">Érica David Martins</div>
         <div class="member">Fernanda Rampazzo Sena Pavini</div>
         <div class="member">Iara Cristina Bueno</div>
         <div class="member">Larissa Peixoto Lopes</div>
@@ -606,6 +607,8 @@ tr:hover td{background:#FAFCFF}
         <div class="member">Telma Batista dos Santos Raze</div>
       </div>
     </div>
+
+    <div id="membrosAdmin" style="display:none;margin-top:16px"></div>
 
     <h3>Regimento interno</h3>
     <p class="pending">A ser disponibilizado.</p>
@@ -1177,7 +1180,7 @@ async function apiCall(action, payload){
 }
 const KEY='comissao_data';
 const SETORES=["Pronto Atendimento Adulto","Pronto Atendimento Infantil","Pronto Atendimento Obstétrico","Pediatria Internação (2° andar)","Cirurgia Pediátrica","Cirurgia Adulto","UTI Cardiológica","UTI Adulto","UTI Neonatal","UTI Pediátrica","Clínica Médica (4° e 6° andar)","Clínica Cirúrgica","Maternidade"];
-const AUDITORES=["Amanda Helena Miguel","Ana Beatriz Souza Gonçalves","Edilson Moreira Borges","Erli Teresinha Marques","Fernanda Rampazzo Sena Pavini","Gabriel Cruvinel Macor","Iara Cristina Bueno","Juliano César Alves Reis","Larissa Peixoto Lopes","Matheus Magalhães","Orlando De Jesus Junior","Rafael de Mello Leão","Raiene Camargo Mlaker Gonçalves","Telma Batista dos Santos Raze"];
+const AUDITORES=["Amanda Helena Miguel","Ana Beatriz Souza Gonçalves","Edilson Moreira Borges","Érica David Martins","Fernanda Rampazzo Sena Pavini","Gabriel Cruvinel Macor","Iara Cristina Bueno","Juliano César Alves Reis","Larissa Peixoto Lopes","Matheus Magalhães","Orlando De Jesus Junior","Rafael de Mello Leão","Raiene Camargo Mlaker Gonçalves","Telma Batista dos Santos Raze"];
 const DOMAIN_MAP={
   "Identificação":"#1F6FEB","Plano terapêutico":"#0D9488","Comunicação":"#6B46C1",
   "Medicação":"#C78A14","Consentimento":"#178A4A","Bundles de segurança":"#C7362F",
@@ -1278,7 +1281,7 @@ const USUARIOS={
   "amandahm":"Amanda Helena Miguel",
   "anabsg":"Ana Beatriz Souza Gonçalves",
   "edilsonmb":"Edilson Moreira Borges",
-  "erlitm":"Erli Teresinha Marques",
+  "ericadm":"Érica David Martins",
   "fernandarsp":"Fernanda Rampazzo Sena Pavini",
   "gabrielcm":"Gabriel Cruvinel Macor",
   "iaracb":"Iara Cristina Bueno",
@@ -1293,6 +1296,260 @@ const USUARIOS={
 const RECAPTCHA_SITE_KEY='6Lf3GUAtAAAAF2Cvs_LkZKIF0MK9zs9sFTtYDqf';
 const ADMINS=['gabrielcm']; // logins com permissão de editar prontuários já auditados
 function isAdmin(){ return currentUser && ADMINS.indexOf(currentUser.login) >= 0; }
+
+/* === GESTÃO DE MEMBROS (2026-10-12) ===========================================
+   Fonte da verdade: Firebase RTDB
+     membros/<login>      = {nome,papel,visivel,auditor,ativo,ordem,pub}  (leitura: autorizados; escrita: só owner)
+     membros_publico/<id> = {nome,papel,ordem}                            (leitura PÚBLICA: só nome e papel; id opaco, não expõe login)
+     autorizados/<login>  = true                                          (o painel liga/desliga junto com "Acesso ativo")
+   AUDITORES e USUARIOS acima viram RESERVA: valem até o Firebase responder, ou se ele falhar.
+   Conta de login (Firebase Auth) e AUTORIZADOS do Apps Script continuam manuais. */
+const OWNER_LOGIN='gabrielcm';
+const MEMBRO_PAPEIS={presidente:'Presidente',vice:'Vice-presidente',secretario:'Secretário(a)',membro:'Membro efetivo'};
+const MEMBRO_PAPEL_ORDEM={presidente:0,vice:1,secretario:2,membro:3};
+const USUARIOS_RESERVA=Object.freeze(Object.assign({},USUARIOS));
+const MEMBROS_RESERVA_PAPEL={gabrielcm:'presidente',julianocar:'vice',raienecmg:'secretario'};
+let MEMBROS_DB=null;          // {login:{...}} depois de carregado; {} = nó vazio
+let _membrosCarregando=null;  // evita leituras simultâneas
+let _membrosAdminAberto=false;
+function mEsc(v){ return String(v==null?'':v).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function mLoginValido(l){ return /^[a-z0-9]{3,30}$/.test(String(l||'')); }
+function mCmpNome(a,b){ return String(a.nome).localeCompare(String(b.nome),'pt-BR'); }
+function mCmpPapel(a,b){
+  var pa=MEMBRO_PAPEL_ORDEM[a.papel]; if(pa===undefined) pa=9;
+  var pb=MEMBRO_PAPEL_ORDEM[b.papel]; if(pb===undefined) pb=9;
+  return pa-pb || mCmpNome(a,b);
+}
+function mIsPermDenied(e){ return !!e && (e.code==='PERMISSION_DENIED' || /permission[_ ]denied/i.test(String(e.message||''))); }
+
+/* Reconstrói USUARIOS e AUDITORES no lugar (as duas são const: muda o conteúdo, não a referência) */
+function membrosAplicar(db){
+  MEMBROS_DB=db||{};
+  var logins=Object.keys(MEMBROS_DB);
+  if(!logins.length) return; // nó vazio: mantém a reserva
+  var novos={}, auds=[];
+  logins.forEach(function(login){
+    var m=MEMBROS_DB[login]; if(!m || m.ativo===false || !m.nome) return;
+    novos[login]=m.nome;
+    if(m.auditor!==false) auds.push(m.nome);
+  });
+  // nunca derrubar o usuário logado da lista de nomes
+  if(currentUser && !novos[currentUser.login] && USUARIOS[currentUser.login]) novos[currentUser.login]=USUARIOS[currentUser.login];
+  Object.keys(USUARIOS).forEach(function(k){ delete USUARIOS[k]; });
+  Object.keys(novos).forEach(function(k){ USUARIOS[k]=novos[k]; });
+  auds.sort(function(a,b){ return a.localeCompare(b,'pt-BR'); });
+  AUDITORES.length=0; auds.forEach(function(a){ AUDITORES.push(a); });
+  try{ fillAuditores(); }catch(e){}
+}
+
+/* Lista para a grade de perfis (aba Membros): Firebase se houver, senão reserva */
+function membrosParaGrade(){
+  var lista=[];
+  if(MEMBROS_DB && Object.keys(MEMBROS_DB).length){
+    Object.keys(MEMBROS_DB).forEach(function(l){ var m=MEMBROS_DB[l]; if(m && m.ativo!==false && m.nome) lista.push({login:l,nome:m.nome}); });
+  } else {
+    Object.keys(USUARIOS_RESERVA).forEach(function(l){ lista.push({login:l,nome:USUARIOS_RESERVA[l]}); });
+  }
+  return lista.sort(mCmpNome);
+}
+
+/* Login: confere se o usuário autenticado é membro ativo.
+   Retorna {ok:true,nome} ou {ok:false}. */
+async function membroVerificarAcesso(user){
+  try{
+    initFirebase();
+    if(!fbDB) throw new Error('sem DB');
+    var snap=await fbDB.ref('membros/'+user).once('value');
+    if(snap.exists()){
+      var m=snap.val()||{};
+      return (m.ativo===false) ? {ok:false} : {ok:true, nome:m.nome||USUARIOS_RESERVA[user]||user};
+    }
+    var algum=await fbDB.ref('membros').limitToFirst(1).once('value');
+    if(!algum.exists() && USUARIOS_RESERVA[user]) return {ok:true, nome:USUARIOS_RESERVA[user]}; // lista ainda não importada
+    return {ok:false};
+  }catch(e){
+    if(mIsPermDenied(e)){
+      // Leitura de membros negada: ou o usuário não está em autorizados (nega),
+      // ou as regras novas ainda não foram publicadas (usa a reserva).
+      try{
+        var a=await fbDB.ref('autorizados/'+user).once('value');
+        if(a.val()===true && USUARIOS_RESERVA[user]) return {ok:true, nome:USUARIOS_RESERVA[user]};
+      }catch(e2){}
+      return {ok:false};
+    }
+    console.warn('[membros] verificação indisponível, usando reserva:', e && e.message);
+    return USUARIOS_RESERVA[user] ? {ok:true, nome:USUARIOS_RESERVA[user]} : {ok:false};
+  }
+}
+
+/* Página Inicial (pública): renderiza a composição a partir de membros_publico */
+function rosterRender(lista){
+  var rg=document.getElementById('rosterRoles'), mg=document.getElementById('rosterMembers');
+  if(!rg || !mg || !lista || !lista.length) return;
+  var cards='';
+  ['presidente','vice','secretario'].forEach(function(p){
+    var nomes=lista.filter(function(m){ return m.papel===p; }).sort(mCmpNome);
+    if(!nomes.length) return;
+    cards+='<div class="role-card"><div class="role-title">'+mEsc(MEMBRO_PAPEIS[p])+'</div>'
+      +nomes.map(function(m){ return '<div class="role-name">'+mEsc(m.nome)+'</div>'; }).join('')+'</div>';
+  });
+  if(cards) rg.innerHTML=cards;
+  var efetivos=lista.filter(function(m){ return m.papel==='membro'; }).sort(mCmpNome);
+  if(efetivos.length) mg.innerHTML=efetivos.map(function(m){ return '<div class="member">'+mEsc(m.nome)+'</div>'; }).join('');
+}
+async function rosterCarregar(){
+  try{
+    initFirebase();
+    if(!fbDB) return;
+    var snap=await fbDB.ref('membros_publico').once('value');
+    var v=snap.val();
+    if(!v) return; // vazio/indisponível: mantém o HTML estático
+    rosterRender(Object.keys(v).map(function(k){ return v[k]; }).filter(function(m){ return m && m.nome; }));
+  }catch(e){ console.warn('[roster] mantendo lista estática:', e && e.message); }
+}
+
+/* Área logada: carrega membros/ e aplica */
+function membrosCarregar(){
+  if(!currentUser) return Promise.resolve();
+  if(_membrosCarregando) return _membrosCarregando;
+  _membrosCarregando=(async function(){
+    try{
+      initFirebase();
+      if(!fbDB) return;
+      await waitForAuth();
+      var snap=await fbDB.ref('membros').once('value');
+      membrosAplicar(snap.val()||{});
+    }catch(e){ console.warn('[membros] usando reserva:', e && e.message); }
+    finally{ _membrosCarregando=null; membrosAdminSync(); }
+  })();
+  return _membrosCarregando;
+}
+
+/* ---------- Painel do owner ---------- */
+function membrosAdminSync(){
+  var btn=document.getElementById('membrosAdminBtn');
+  var box=document.getElementById('membrosAdmin');
+  var isOwner=!!(currentUser && currentUser.login===OWNER_LOGIN);
+  if(btn) btn.style.display=isOwner?'inline-block':'none';
+  if(!isOwner){ _membrosAdminAberto=false; if(box){ box.style.display='none'; box.innerHTML=''; } return; }
+  if(_membrosAdminAberto) membrosAdminRender();
+}
+function membrosAdminToggle(){
+  if(!currentUser || currentUser.login!==OWNER_LOGIN) return;
+  _membrosAdminAberto=!_membrosAdminAberto;
+  var box=document.getElementById('membrosAdmin');
+  if(!_membrosAdminAberto){ if(box){ box.style.display='none'; box.innerHTML=''; } return; }
+  membrosCarregar().then(membrosAdminRender);
+}
+function mPapelSelect(id,val){
+  return '<select id="'+id+'" style="border:1px solid var(--line);border-radius:8px;padding:5px 6px;font-size:12px;background:var(--card);color:var(--ink);font-family:inherit">'
+    +Object.keys(MEMBRO_PAPEIS).map(function(p){ return '<option value="'+p+'"'+(p===val?' selected':'')+'>'+mEsc(MEMBRO_PAPEIS[p])+'</option>'; }).join('')+'</select>';
+}
+function mChk(id,val,dis){ return '<input type="checkbox" id="'+id+'"'+(val?' checked':'')+(dis?' disabled':'')+' style="width:16px;height:16px;accent-color:var(--blue);cursor:pointer">'; }
+function membrosAdminRender(){
+  var box=document.getElementById('membrosAdmin');
+  if(!box || !currentUser || currentUser.login!==OWNER_LOGIN) return;
+  box.style.display='block';
+  var db=MEMBROS_DB||{};
+  var logins=Object.keys(db);
+  var inp='border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-size:12px;background:var(--card);color:var(--ink);font-family:inherit';
+  var h='<div style="border:1.5px dashed var(--blue);border-radius:14px;padding:14px">';
+  h+='<div style="font-weight:900;color:var(--navy);margin-bottom:4px">Gerenciar membros</div>';
+  h+='<div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:12px">Alterações aqui atualizam a Página Inicial, a lista de auditores, a grade de perfis e o painel do dashboard. '
+    +'<b>Desligar "Acesso ativo"</b> bloqueia o login e remove o membro de <code>autorizados</code> (as auditorias dele continuam na planilha). '
+    +'Nada é apagado.</div>';
+  if(!logins.length){
+    h+='<div class="alert-box alert-partial" style="margin-bottom:12px"><span class="ic">&#9888;&#65039;</span><div>A lista de membros ainda não está no Firebase. O site está usando a lista fixa do código.<br>'
+      +'<button class="primary" style="margin-top:8px;padding:8px 14px" onclick="membrosImportar()">Importar lista atual ('+Object.keys(USUARIOS_RESERVA).length+' membros)</button></div></div>';
+  } else {
+    var lista=logins.map(function(l){ var m=db[l]||{}; return {login:l,nome:m.nome||'',papel:m.papel||'membro',visivel:m.visivel!==false,auditor:m.auditor!==false,ativo:m.ativo!==false}; }).sort(mCmpPapel);
+    h+='<div class="tablewrap"><table><thead><tr><th>Nome</th><th>Login</th><th>Papel</th><th title="Aparece na Página Inicial">Pág. inicial</th><th>Auditor</th><th>Acesso ativo</th><th></th></tr></thead><tbody>';
+    lista.forEach(function(m,i){
+      var dono=m.login===OWNER_LOGIN;
+      h+='<tr'+(m.ativo?'':' style="opacity:.55"')+'>'
+        +'<td><input id="mNome_'+i+'" value="'+mEsc(m.nome)+'" maxlength="120" style="'+inp+';width:100%;min-width:200px"></td>'
+        +'<td style="font-family:\'DM Mono\',monospace;font-size:12px">'+mEsc(m.login)+'</td>'
+        +'<td>'+mPapelSelect('mPapel_'+i,m.papel)+'</td>'
+        +'<td style="text-align:center">'+mChk('mVis_'+i,m.visivel)+'</td>'
+        +'<td style="text-align:center">'+mChk('mAud_'+i,m.auditor)+'</td>'
+        +'<td style="text-align:center">'+mChk('mAtv_'+i,m.ativo,dono)+'</td>'
+        +'<td><button class="secondary" style="padding:6px 12px" onclick="membrosSalvarLinha('+i+',\''+m.login+'\')">Salvar</button></td>'
+        +'</tr>';
+    });
+    h+='</tbody></table></div>';
+  }
+  h+='<div style="margin-top:16px;padding-top:12px;border-top:1px dashed var(--line)">';
+  h+='<div style="font-weight:800;color:var(--navy);margin-bottom:6px">Adicionar membro</div>';
+  h+='<div style="font-size:11.5px;color:var(--muted);margin-bottom:8px;line-height:1.5">Antes: crie a conta em Firebase Console → Authentication → Add user, com e-mail <code>&lt;login&gt;@comissaohps.local</code> e senha provisória exclusiva. '
+    +'Depois: inclua o login em <code>AUTORIZADOS</code> no Apps Script v2 (sem isso ele entra, mas não grava auditoria).</div>';
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
+    +'<input id="mNovoLogin" placeholder="login (ex.: ericadm)" maxlength="30" style="'+inp+';width:170px" autocomplete="off">'
+    +'<input id="mNovoNome" placeholder="Nome completo" maxlength="120" style="'+inp+';flex:1;min-width:220px">'
+    +mPapelSelect('mNovoPapel','membro')
+    +'<label style="font-size:12px;display:inline-flex;gap:5px;align-items:center">'+mChk('mNovoVis',true)+' Pág. inicial</label>'
+    +'<label style="font-size:12px;display:inline-flex;gap:5px;align-items:center">'+mChk('mNovoAud',true)+' Auditor</label>'
+    +'<button class="primary" style="padding:8px 14px" onclick="membrosAdicionar()">Adicionar</button></div>';
+  h+='<div id="membrosAdminMsg" style="font-size:12px;margin-top:10px;min-height:16px"></div></div></div>';
+  box.innerHTML=h;
+}
+function mMsg(txt,ok){ var el=document.getElementById('membrosAdminMsg'); if(el){ el.style.color=ok?'var(--green)':'var(--red)'; el.textContent=txt; } }
+
+/* Grava um membro em uma única atualização multi-caminho (update, NUNCA set na raiz) */
+async function membroGravar(login, dados){
+  if(!currentUser || currentUser.login!==OWNER_LOGIN) throw new Error('Apenas o presidente pode alterar membros.');
+  if(!mLoginValido(login)) throw new Error('Login inválido: use 3 a 30 letras minúsculas/números, sem espaço ou acento.');
+  var nome=String(dados.nome||'').trim().replace(/\s+/g,' ');
+  if(nome.length<3 || nome.length>120) throw new Error('Nome deve ter entre 3 e 120 caracteres.');
+  var papel=MEMBRO_PAPEIS[dados.papel]?dados.papel:'membro';
+  var ativo = login===OWNER_LOGIN ? true : !!dados.ativo;
+  var visivel=!!dados.visivel, auditor=!!dados.auditor;
+  var atual=(MEMBROS_DB&&MEMBROS_DB[login])||{};
+  var pub=atual.pub || fbDB.ref('membros_publico').push().key;
+  var ordem=typeof atual.ordem==='number'?atual.ordem:0;
+  var upd={};
+  upd['membros/'+login]={nome:nome,papel:papel,visivel:visivel,auditor:auditor,ativo:ativo,ordem:ordem,pub:pub};
+  upd['membros_publico/'+pub]=(visivel&&ativo)?{nome:nome,papel:papel,ordem:ordem}:null;
+  upd['autorizados/'+login]=ativo?true:null;
+  await fbDB.ref().update(upd);
+  if(!MEMBROS_DB) MEMBROS_DB={};
+  MEMBROS_DB[login]=upd['membros/'+login];
+}
+async function membrosAposGravar(msg){
+  membrosAplicar(MEMBROS_DB);
+  membrosAdminRender();
+  mMsg(msg,true);
+  rosterCarregar();
+}
+async function membrosSalvarLinha(i,login){
+  try{
+    initFirebase(); await waitForAuth();
+    var g=function(id){ return document.getElementById(id); };
+    await membroGravar(login,{nome:g('mNome_'+i).value,papel:g('mPapel_'+i).value,visivel:g('mVis_'+i).checked,auditor:g('mAud_'+i).checked,ativo:g('mAtv_'+i).checked});
+    await membrosAposGravar('✔ '+login+' salvo.');
+  }catch(e){ mMsg('Erro ao salvar: '+(mIsPermDenied(e)?'permissão negada (as regras novas do Firebase já foram publicadas?)':(e.message||e)),false); }
+}
+async function membrosAdicionar(){
+  try{
+    initFirebase(); await waitForAuth();
+    var login=String(document.getElementById('mNovoLogin').value||'').trim().toLowerCase();
+    if(MEMBROS_DB && MEMBROS_DB[login]) throw new Error('Esse login já existe na lista. Edite a linha dele acima.');
+    await membroGravar(login,{nome:document.getElementById('mNovoNome').value,papel:document.getElementById('mNovoPapel').value,
+      visivel:document.getElementById('mNovoVis').checked,auditor:document.getElementById('mNovoAud').checked,ativo:true});
+    await membrosAposGravar('✔ '+login+' adicionado. Falta: conta no Firebase Auth (se ainda não criou) e AUTORIZADOS no Apps Script.');
+  }catch(e){ mMsg('Erro ao adicionar: '+(mIsPermDenied(e)?'permissão negada (as regras novas do Firebase já foram publicadas?)':(e.message||e)),false); }
+}
+async function membrosImportar(){
+  if(!confirm('Importar os '+Object.keys(USUARIOS_RESERVA).length+' membros da lista fixa para o Firebase?')) return;
+  try{
+    initFirebase(); await waitForAuth();
+    var logins=Object.keys(USUARIOS_RESERVA);
+    for(var i=0;i<logins.length;i++){
+      var l=logins[i];
+      await membroGravar(l,{nome:USUARIOS_RESERVA[l],papel:MEMBROS_RESERVA_PAPEL[l]||'membro',visivel:true,auditor:true,ativo:true});
+    }
+    await membrosAposGravar('✔ '+logins.length+' membros importados.');
+  }catch(e){ mMsg('Erro na importação: '+(mIsPermDenied(e)?'permissão negada (as regras novas do Firebase já foram publicadas?)':(e.message||e)),false); }
+}
 
 /* === EMAILJS CONFIG === */
 const EJS_SERVICE   = 'service_rru71xs';
@@ -1443,7 +1700,7 @@ async function tryLogin(){
   const blockMsg=checkLoginBlocked();
   if(blockMsg){ err.textContent=blockMsg; return; }
 
-  if(!USUARIOS[user]){
+  if(!mLoginValido(user)){
     registerFailedAttempt();
     err.textContent='Usuário ou senha incorretos.';
     return;
@@ -1463,6 +1720,16 @@ async function tryLogin(){
       err.textContent='Usuário ou senha incorretos.';
       return;
     }
+
+    // Membro ativo? (lista do Firebase; reserva fixa se o Firebase não responder)
+    const acesso=await membroVerificarAcesso(user);
+    if(!acesso.ok){
+      try{ await fbAuth.signOut(); }catch(e){}
+      registerFailedAttempt();
+      err.textContent='Seu acesso à plataforma não está ativo. Procure a presidência da Comissão.';
+      return;
+    }
+    USUARIOS[user]=acesso.nome;
 
     clearLoginAttempts();
 
@@ -1515,6 +1782,7 @@ function clearInactivityTimer(){
 })();
 
 function updateColetaTabLabel(){
+  try{ if(currentUser) membrosCarregar(); else membrosAdminSync(); }catch(e){}
   var t=document.getElementById('tab-coleta');
   if(t) t.textContent = currentUser ? 'Iniciar Auditoria' : 'Login';
   var cem=document.getElementById('tab-cem');
@@ -2053,22 +2321,8 @@ async function loadMembros(){
     }catch(e){ console.warn('Firebase offline'); }
   }
 
-  const membros=[
-    {login:'amandahm',nome:'Amanda Helena Miguel'},
-    {login:'anabsg',nome:'Ana Beatriz Souza Gonçalves'},
-    {login:'edilsonmb',nome:'Edilson Moreira Borges'},
-    {login:'erlitm',nome:'Erli Teresinha Marques'},
-    {login:'fernandarsp',nome:'Fernanda Rampazzo Sena Pavini'},
-    {login:'gabrielcm',nome:'Gabriel Cruvinel Macor'},
-    {login:'iaracb',nome:'Iara Cristina Bueno'},
-    {login:'julianocar',nome:'Juliano César Alves Reis'},
-    {login:'larissapl',nome:'Larissa Peixoto Lopes'},
-    {login:'matheusm',nome:'Matheus Magalhães'},
-    {login:'orlandodjj',nome:'Orlando De Jesus Junior'},
-    {login:'rafaeldml',nome:'Rafael de Mello Leão'},
-    {login:'raienecmg',nome:'Raiene Camargo Mlaker Gonçalves'},
-    {login:'telmabdsr',nome:'Telma Batista dos Santos Raze'}
-  ];
+  await membrosCarregar();
+  const membros=membrosParaGrade();
 
   let cards='';
   membros.forEach(function(m){
@@ -2079,9 +2333,9 @@ async function loadMembros(){
       ? '<img src="'+pd.foto+'" style="width:100%;height:100%;object-fit:cover">'
       : '<span style="font-size:18px;font-weight:900;color:#fff">'+initials+'</span>';
 
-    cards+='<div class="member-card'+(isMe?' is-me':'')+'" data-login="'+m.login+'" data-nome="'+m.nome+'" onclick="viewMemberProfile(this)">'
+    cards+='<div class="member-card'+(isMe?' is-me':'')+'" data-login="'+mEsc(m.login)+'" data-nome="'+mEsc(m.nome)+'" onclick="viewMemberProfile(this)">'
       +'<div class="member-avatar">'+avatarInner+'</div>'
-      +'<div class="member-name">'+m.nome+'</div>'
+      +'<div class="member-name">'+mEsc(m.nome)+'</div>'
       +(pd.cargo?'<div class="member-cargo">'+pd.cargo+'</div>':'')
       +(pd.especialidade?'<div class="member-spec">'+pd.especialidade+'</div>':'')
       +(isMe?'<div class="member-me-badge">● Você</div>':'')
@@ -3780,6 +4034,7 @@ function updateSyncStatus(){
 }
 load();fillSectors();fillAuditores();renderForm();renderMultiForm();renderFisicoExtra();updateSyncStatus();
 try{ renderRegimento(); }catch(e){}
+try{ rosterCarregar(); }catch(e){}
 // Verificar sessão salva
 var _saved=sessionStorage.getItem('hps_user');
 if(_saved){
