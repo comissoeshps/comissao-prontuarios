@@ -1502,6 +1502,12 @@ function membrosAdminRender(){
     h+='<div class="alert-box alert-partial" style="margin-top:12px"><span class="ic">&#9888;&#65039;</span><div><b>A lista do Firebase está incompleta:</b> faltam '+faltam.length+' membro(s) da lista fixa ('+mEsc(faltam.join(', '))+').<br>'
       +'<button class="primary" style="margin-top:8px;padding:8px 14px" onclick="membrosImportar()">Completar lista (importar os '+faltam.length+' que faltam)</button></div></div>';
   }
+  h+='<div style="margin-top:16px;padding-top:12px;border-top:1px dashed var(--line)">'
+    +'<div style="font-weight:800;color:var(--navy);margin-bottom:6px">Abas visíveis para os auditores</div>'
+    +'<label style="font-size:13px;display:inline-flex;gap:8px;align-items:center;cursor:pointer">'+mChk('cfgResAud',CFG_PLAT.resultados_auditores!==false)+' Aba <b>Resultados</b></label>'
+    +' <button class="secondary" style="padding:6px 12px;margin-left:8px" onclick="cfgPlatSalvar()">Salvar</button>'
+    +'<div style="font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.5">Desligado: a aba some para todos os membros, menos você. Vale na hora para quem estiver logado. '
+    +'É só visual — não é barreira de segurança para os dados.</div></div>';
   if(!logins.length){ h+='<div id="membrosAdminMsg" style="font-size:12px;margin-top:10px;min-height:16px"></div></div>'; box.innerHTML=h; return; } // sem "Adicionar" antes de importar
   h+='<div style="margin-top:16px;padding-top:12px;border-top:1px dashed var(--line)">';
   h+='<div style="font-weight:800;color:var(--navy);margin-bottom:6px">Adicionar membro</div>';
@@ -1577,6 +1583,56 @@ async function membrosImportar(){
     }
     await membrosAposGravar('✔ '+logins.length+' membros importados.');
   }catch(e){ mMsg('Erro na importação: '+(mIsPermDenied(e)?'permissão negada (as regras novas do Firebase já foram publicadas?)':(e.message||e)),false); }
+}
+
+
+/* === VISIBILIDADE DE ABAS PARA AUDITORES (2026-10-12) =========================
+   Firebase: config_plataforma/resultados_auditores (bool). Leitura: autorizados; escrita: só owner.
+   Ausente ou ilegível = visível (comportamento anterior). É controle de INTERFACE,
+   não de acesso a dados (a base continua acessível pelo Apps Script a qualquer autorizado). */
+var CFG_PLAT={resultados_auditores:true};
+var _cfgPlatRef=null;
+function podeVerResultados(){
+  if(!currentUser) return false;
+  if(currentUser.login===OWNER_LOGIN) return true;
+  return CFG_PLAT.resultados_auditores!==false;
+}
+function abasAplicar(){
+  var b=document.getElementById('tab-resultados'); if(!b) return;
+  var ok=podeVerResultados();
+  b.style.display=ok?'flex':'none';
+  if(!ok){
+    var pg=document.getElementById('resultados');
+    var fr=document.getElementById('resultadosFrame');
+    if(fr){ fr.removeAttribute('src'); fr.removeAttribute('data-src'); }
+    if(pg && pg.classList.contains('active')) show('sobre', document.getElementById('tab-inicio'));
+  }
+}
+function cfgPlatCarregar(){
+  try{
+    initFirebase(); if(!fbDB || _cfgPlatRef) return;
+    _cfgPlatRef=fbDB.ref('config_plataforma');
+    _cfgPlatRef.on('value', function(snap){
+      var v=snap.val()||{};
+      CFG_PLAT.resultados_auditores = (v.resultados_auditores!==false);
+      abasAplicar();
+      if(_membrosAdminAberto) membrosAdminRender();
+    }, function(err){ console.warn('[config_plataforma] usando padrão (visível):', err && err.message); });
+  }catch(e){}
+}
+function cfgPlatDesligar(){
+  if(_cfgPlatRef){ try{ _cfgPlatRef.off(); }catch(e){} _cfgPlatRef=null; }
+  CFG_PLAT={resultados_auditores:true};
+}
+async function cfgPlatSalvar(){
+  try{
+    if(!currentUser || currentUser.login!==OWNER_LOGIN) throw new Error('Apenas o presidente pode alterar.');
+    initFirebase(); await waitForAuth();
+    var on=!!(document.getElementById('cfgResAud')||{}).checked;
+    await fbDB.ref('config_plataforma').update({resultados_auditores:on});
+    CFG_PLAT.resultados_auditores=on; abasAplicar();
+    mMsg('✔ Aba Resultados '+(on?'visível':'oculta')+' para os auditores.',true);
+  }catch(e){ mMsg('Erro ao salvar: '+(mIsPermDenied(e)?'permissão negada (a regra config_plataforma já foi publicada no Firebase?)':(e.message||e)),false); }
 }
 
 /* === EMAILJS CONFIG === */
@@ -1848,7 +1904,7 @@ function completeLogin(user){
   if(hname) hname.textContent=currentUser.name;
   if(havatar){
     const initials=currentUser.name.split(' ').map(p=>p[0]).join('').slice(0,2).toUpperCase();
-    const savedAvatar=localStorage.getItem('avatar_'+currentUser.login);
+    const savedAvatar=safeImgSrc(localStorage.getItem('avatar_'+currentUser.login));
     havatar.innerHTML=savedAvatar
       ? '<img src="'+savedAvatar+'" style="width:100%;height:100%;object-fit:cover" alt="foto">'
       : '<span>'+initials+'</span>';
@@ -1858,8 +1914,8 @@ function completeLogin(user){
   const sairBtn=$('tab-sair');
   if(sairBtn) sairBtn.style.display='flex';
   const epiBtn=$('tab-epidemio'); if(epiBtn) epiBtn.style.display='flex';
-  const resBtn=$('tab-resultados'); if(resBtn) resBtn.style.display='flex';
-  if(location.hash==='#resultados'){ setTimeout(function(){ var rb=document.getElementById('tab-resultados'); if(rb) abrirResultados(rb); }, 350); }
+  abasAplicar(); cfgPlatCarregar();
+  if(location.hash==='#resultados' && podeVerResultados()){ setTimeout(function(){ var rb=document.getElementById('tab-resultados'); if(rb) abrirResultados(rb); }, 350); }
   afterLogin();
 }
 
@@ -2051,6 +2107,7 @@ function logout(){
   var _rf=document.getElementById('resultadosFrame'); if(_rf){ _rf.removeAttribute('src'); _rf.removeAttribute('data-src'); }
   try{ renderRegimento(); }catch(e){}
   try{ if(typeof dashDetach==='function') dashDetach(); }catch(e){}
+  try{ cfgPlatDesligar(); }catch(e){}
   // 2026-10-12: limpa a busca de atendimento (dados de paciente não ficam na tela após sair)
   try{ var _bw=document.getElementById('dbBuscaWrap'); if(_bw) _bw.innerHTML=''; var _vd=document.getElementById('view-dashboard'); if(_vd) _vd.innerHTML=''; _dbBuscaVolta=false; }catch(e){}
   __dashAttached=false;
@@ -3246,6 +3303,7 @@ function abrirDashboard(){
 /* Aba "Resultados": embute o dashboard curado (somente leitura) dentro da página inicial */
 function abrirResultados(btn){
   if(!currentUser){ alert('Faça login para acessar os Resultados.'); return; }
+  if(!podeVerResultados()){ abasAplicar(); return; }
   show('resultados', btn||document.getElementById('tab-resultados'));
   var fr=document.getElementById('resultadosFrame');
   if(fr){
@@ -4090,14 +4148,14 @@ if(_saved){
     if(_hn) _hn.textContent=currentUser.name;
     if(_ha){
       var _ini=currentUser.name.split(' ').map(function(p){return p[0];}).join('').slice(0,2).toUpperCase();
-      var _sav=localStorage.getItem('avatar_'+currentUser.login);
+      var _sav=safeImgSrc(localStorage.getItem('avatar_'+currentUser.login));
       _ha.innerHTML=_sav?'<img src="'+_sav+'" style="width:100%;height:100%;object-fit:cover" alt="foto">':'<span>'+_ini+'</span>';
     }
     // Mostrar botão Sair
     var _sb=document.getElementById('tab-sair');
     if(_sb) _sb.style.display='flex';
     var _epi=document.getElementById('tab-epidemio'); if(_epi) _epi.style.display='flex';
-    var _res=document.getElementById('tab-resultados'); if(_res) _res.style.display='flex';
+    abasAplicar(); cfgPlatCarregar();
     updateColetaTabLabel();
     afterLogin().then(()=>{ updateSobreWelcome(); });
   }catch(e){}
