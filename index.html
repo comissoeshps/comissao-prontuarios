@@ -741,7 +741,7 @@ tr:hover td{background:#FAFCFF}
           <span id="autoSelArrow" style="color:var(--muted);font-size:12px">▾</span>
         </button>
         <div id="autoSelPanel" style="display:none;padding:14px 16px;border-top:1.5px solid var(--line)">
-          <p class="sub" style="margin:0 0 12px">A plataforma sorteia um atendimento do <b>Banco de Dados</b> conforme os filtros abaixo e preenche o número de atendimento e o setor automaticamente. Atendimentos que <b>já foram auditados</b> são excluídos do sorteio.</p>
+          <p class="sub" style="margin:0 0 12px">A plataforma sorteia um atendimento do <b>Banco de Dados</b> conforme os filtros abaixo e preenche o número de atendimento. O <b>setor, o tipo de internação e a data</b> são confirmados por você (use <b>🔎 Ver registro</b> para conferir no Banco de Dados). Atendimentos que <b>já foram auditados</b> são excluídos do sorteio.</p>
           <div class="meta meta-3">
             <div class="field"><label>Clínica de atendimento</label><select id="autoSelClinica"><option value="">Todas as clínicas</option></select></div>
             <div class="field"><label>Tipo de internação / atendimento</label><select id="autoSelTipo"><option value="">Todos os tipos</option></select></div>
@@ -1000,6 +1000,7 @@ tr:hover td{background:#FAFCFF}
   </div>
 </section>
 <section id="epidemio" class="page">
+  <div id="dbBuscaWrap"></div>
   <section class="view" id="view-dashboard">
     <div style="color:var(--muted);text-align:center;padding:40px 0">Carregando painel…</div>
   </section>
@@ -2049,6 +2050,8 @@ function logout(){
   var _rf=document.getElementById('resultadosFrame'); if(_rf){ _rf.removeAttribute('src'); _rf.removeAttribute('data-src'); }
   try{ renderRegimento(); }catch(e){}
   try{ if(typeof dashDetach==='function') dashDetach(); }catch(e){}
+  // 2026-10-12: limpa a busca de atendimento (dados de paciente não ficam na tela após sair)
+  try{ var _bw=document.getElementById('dbBuscaWrap'); if(_bw) _bw.innerHTML=''; var _vd=document.getElementById('view-dashboard'); if(_vd) _vd.innerHTML=''; _dbBuscaVolta=false; }catch(e){}
   __dashAttached=false;
   // Limpar campos de login
   if($('loginUser'))$('loginUser').value='';
@@ -3717,7 +3720,8 @@ async function autoSelBuscar(){
     if(st) st.innerHTML='<div class="alert-box alert-ok"><span class="ic">🎯</span><div>'+
       '<b>Atendimento sorteado: '+escapeHtml(num)+'</b><br>'+
       'Agora confirme o <b>setor auditado</b>, o <b>tipo de internação</b> e a <b>data da auditoria</b> para prosseguir com a auditoria.'+
-      '<div style="margin-top:8px"><button type="button" class="secondary" onclick="autoSelBuscar()" style="padding:8px 14px;font-size:12px">🔁 Buscar outro</button></div>'+
+      '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="secondary" onclick="autoSelBuscar()" style="padding:8px 14px;font-size:12px">🔁 Buscar outro</button>'+
+       '<button type="button" class="secondary" onclick="dbBuscaAbrir(\''+String(num).replace(/[^0-9A-Za-z\/.\-]/g,'')+'\')" style="padding:8px 14px;font-size:12px">🔎 Ver registro no Banco de Dados</button></div>'+
       '</div></div>';
     try{ checkAttendance(); }catch(e){}
   } finally {
@@ -4107,11 +4111,91 @@ function toast(msg){
 /* currentUser no app é objeto {login,...}; o painel só precisa do login em texto */
 function dashLogin(){ return (currentUser && currentUser.login) ? currentUser.login : ''; }
 
+
+/* ═══════════════════════════════════════════ BANCO DE DADOS — PROCURAR ATENDIMENTO (2026-10-12)
+   Auditores: a aba "Banco de Dados" mostra só esta busca. Correspondência EXATA pelo nº
+   (ignora zeros à esquerda e separadores, como no seletor) — nada de busca parcial,
+   para não listar atendimentos de terceiros. Leitura apenas; nada é gravado. */
+var _dbBuscaVolta=false;
+function dbBuscaRender(){
+  var w=document.getElementById('dbBuscaWrap'); if(!w) return;
+  if(!document.getElementById('dbBuscaNum')){
+    w.innerHTML='<div class="card" style="margin-bottom:16px">'+
+      '<h2 style="margin:0 0 4px">🔎 Procurar atendimento</h2>'+
+      '<p class="sub" style="margin:0 0 12px">Digite o número de atendimento para ver o registro no Banco de Dados e confirmar <b>setor/clínica</b>, <b>tipo de internação</b> e <b>datas</b> antes de auditar.</p>'+
+      '<form onsubmit="dbBuscar();return false" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+
+        '<input id="dbBuscaNum" inputmode="numeric" autocomplete="off" maxlength="30" placeholder="Nº de atendimento" style="flex:1;min-width:200px;border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;font-size:15px;font-family:inherit;background:var(--card);color:var(--ink)">'+
+        '<button type="submit" class="primary" style="padding:10px 18px">Procurar</button>'+
+      '</form>'+
+      '<div id="dbBuscaVolta" style="display:none;margin-top:10px"><button type="button" class="secondary" onclick="dbBuscaVoltar()" style="padding:8px 14px;font-size:12px">&#8592; Voltar para a auditoria</button></div>'+
+      '<div id="dbBuscaRes" style="margin-top:14px"></div>'+
+    '</div>';
+  }
+  var vb=document.getElementById('dbBuscaVolta'); if(vb) vb.style.display=_dbBuscaVolta?'block':'none';
+}
+function dbBuscaAbrir(num){
+  if(!currentUser) return;
+  _dbBuscaVolta=true;
+  abrirPerfilEpidemiologico(document.getElementById('tab-epidemio'));
+  var i=document.getElementById('dbBuscaNum'); if(i) i.value=String(num||'');
+  dbBuscar();
+}
+function dbBuscaVoltar(){
+  _dbBuscaVolta=false;
+  show('coleta', document.getElementById('tab-coleta'));
+}
+function dbFmtData(d,h){ d=String(d||'').trim(); h=String(h||'').trim(); return d ? (d+(h?' '+h:'')) : '—'; }
+async function dbBuscar(){
+  var i=document.getElementById('dbBuscaNum'), out=document.getElementById('dbBuscaRes');
+  if(!i || !out || !currentUser) return;
+  var raw=String(i.value||'').trim();
+  var key=autoSelKeyNum(raw);
+  if(!raw){ out.innerHTML=''; return; }
+  if(!/^\d{3,}$/.test(key)){ out.innerHTML='<div class="alert-box alert-partial"><span class="ic">⚠️</span><div>Digite um número de atendimento válido (somente números).</div></div>'; return; }
+  out.innerHTML='<div class="alert-box" style="background:#F4F7FC;border:1px solid var(--line);color:var(--muted)"><span class="ic">⏳</span><div>Procurando no Banco de Dados…</div></div>';
+  var ok=await autoSelEnsureData();
+  if(!ok){ out.innerHTML='<div class="alert-box alert-blocked"><span class="ic">⚠️</span><div>Banco de Dados de atendimentos indisponível (vazio ou sem acesso). Tente de novo em instantes; se persistir, avise a presidência.</div></div>'; return; }
+  var achados=dashData.filter(function(r){ return autoSelKeyNum(r.numAtendimento)===key; });
+  if(!achados.length){
+    out.innerHTML='<div class="alert-box alert-partial"><span class="ic">🔍</span><div>Nenhum registro com o atendimento <b>'+dashEsc(raw)+'</b> no Banco de Dados. Confira o número no prontuário; o mês dele pode ainda não ter sido importado.</div></div>';
+    return;
+  }
+  var campos=[['Nº atendimento',function(r){return r.numAtendimento;}],
+    ['Clínica / setor',function(r){return r.clinica;}],
+    ['Tipo de atendimento',function(r){return r.tipoAtendimento;}],
+    ['Início',function(r){return dbFmtData(r.dataInicio,r.horaInicio);}],
+    ['Fim / alta',function(r){return dbFmtData(r.dataFim,r.horaFim);}],
+    ['Tempo de internação',function(r){return (typeof r.los==='number')?(r.los<1?'menos de 1 dia':(Math.round(r.los*10)/10).toString().replace('.',',')+' dia(s)'):'';}],
+    ['Mês (ref.)',function(r){return r.mesEff?dashMesLabel(r.mesEff):'';}],
+    ['Idade',function(r){return r.idade;}],
+    ['Sexo',function(r){return r.sexo;}],
+    ['CID',function(r){return [r.cid,r.nomeCid].filter(function(x){return String(x||'').trim();}).join(' — ');}],
+    ['Tipo de alta',function(r){return [r.tipoAlta,r.nomeAlta].filter(function(x){return String(x||'').trim();}).join(' — ');}]];
+  var h='';
+  if(achados.length>1) h+='<div class="alert-box alert-partial" style="margin-bottom:10px"><span class="ic">ℹ️</span><div>Este número aparece em <b>'+achados.length+'</b> registros (ex.: transferência entre setores ou meses diferentes). Confira qual corresponde ao período auditado.</div></div>';
+  achados.forEach(function(r,idx){
+    h+='<div class="tablewrap" style="margin-bottom:10px"><table><tbody>';
+    if(achados.length>1) h+='<tr><td colspan="2" style="font-weight:900;color:var(--navy);background:var(--soft)">Registro '+(idx+1)+' de '+achados.length+'</td></tr>';
+    campos.forEach(function(c){ var v=c[1](r); v=String(v==null?'':v).trim(); h+='<tr><td style="font-weight:700;color:var(--muted);width:200px">'+dashEsc(c[0])+'</td><td>'+(v?dashEsc(v):'—')+'</td></tr>'; });
+    h+='</tbody></table></div>';
+  });
+  h+='<div id="dbBuscaAud" style="font-size:12.5px;color:var(--muted)">Verificando se já foi auditado…</div>';
+  out.innerHTML=h;
+  // aviso de auditoria anterior (planilha). Falha na consulta = aviso neutro, nunca "não auditado".
+  try{
+    var map=await autoSelAudited();
+    var el=document.getElementById('dbBuscaAud'); if(!el) return;
+    if(map===null) el.innerHTML='⚠️ Não foi possível consultar a planilha de auditorias agora. A checagem completa acontece ao preencher o nº em "Iniciar Auditoria".';
+    else if(map[key]) el.innerHTML='<span style="color:var(--red);font-weight:700">⚠️ Este atendimento já consta na planilha de auditorias.</span>';
+    else el.innerHTML='<span style="color:var(--green);font-weight:700">✔ Nenhuma auditoria anterior encontrada para este atendimento.</span>';
+  }catch(e){ var el2=document.getElementById('dbBuscaAud'); if(el2) el2.textContent='⚠️ Não foi possível consultar a planilha de auditorias agora.'; }
+}
 /* --- abertura da aba: exige login, conecta ao Firebase e desenha --- */
 var __dashAttached=false;
 function abrirPerfilEpidemiologico(btn){
   if(!currentUser){ alert('Faça login para acessar o Banco de Dados.'); return; }
   show('epidemio', btn);
+  dbBuscaRender();
   var v=document.getElementById('view-dashboard'); if(v) v.classList.add('active');
   if(!__dashAttached){ try{ dashAttach(); dashProtoAttach(); dashSepseAttach(); dashSibAttach(); dashEditoresAttach(); __dashAttached=true; }catch(e){ console.warn('dashAttach:', e && e.message); } }
   renderDashboard();
@@ -5644,6 +5728,9 @@ function dashSibDraw(){
 function renderDashboard(){
   var v=dEl('view-dashboard'); if(!v) return;
   dashDestroyCharts();
+  // 2026-10-12: auditores veem SÓ a busca por atendimento; painel completo apenas p/ dono/editores
+  if(!dashCanEdit()){ v.innerHTML=''; v.style.display='none'; dbBuscaRender(); return; }
+  v.style.display='';
   var admin=dashIsAdmin();
   var kind=dashUpKind;
   function kindLabel(v,txt){ return '<label class="'+(kind===v?'on':'')+'"><input type="radio" name="dashKind"'+(kind===v?' checked':'')+' onclick="dashSetKind(\''+v+'\')"> '+txt+'</label>'; }
