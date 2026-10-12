@@ -1333,6 +1333,12 @@ function membrosAplicar(db){
     novos[login]=m.nome;
     if(m.auditor!==false) auds.push(m.nome);
   });
+  // lista parcial: quem está na reserva e AINDA NÃO está no Firebase continua valendo
+  Object.keys(USUARIOS_RESERVA).forEach(function(l){
+    if(MEMBROS_DB[l]) return;
+    novos[l]=USUARIOS_RESERVA[l];
+    if(auds.indexOf(USUARIOS_RESERVA[l])<0) auds.push(USUARIOS_RESERVA[l]);
+  });
   // nunca derrubar o usuário logado da lista de nomes
   if(currentUser && !novos[currentUser.login] && USUARIOS[currentUser.login]) novos[currentUser.login]=USUARIOS[currentUser.login];
   Object.keys(USUARIOS).forEach(function(k){ delete USUARIOS[k]; });
@@ -1347,6 +1353,7 @@ function membrosParaGrade(){
   var lista=[];
   if(MEMBROS_DB && Object.keys(MEMBROS_DB).length){
     Object.keys(MEMBROS_DB).forEach(function(l){ var m=MEMBROS_DB[l]; if(m && m.ativo!==false && m.nome) lista.push({login:l,nome:m.nome}); });
+    Object.keys(USUARIOS_RESERVA).forEach(function(l){ if(!MEMBROS_DB[l]) lista.push({login:l,nome:USUARIOS_RESERVA[l]}); });
   } else {
     Object.keys(USUARIOS_RESERVA).forEach(function(l){ lista.push({login:l,nome:USUARIOS_RESERVA[l]}); });
   }
@@ -1366,6 +1373,12 @@ async function membroVerificarAcesso(user){
     }
     var algum=await fbDB.ref('membros').limitToFirst(1).once('value');
     if(!algum.exists() && USUARIOS_RESERVA[user]) return {ok:true, nome:USUARIOS_RESERVA[user]}; // lista ainda não importada
+    // 2026-10-12 (incidente): lista no Firebase INCOMPLETA não pode trancar quem está na reserva
+    // e continua em autorizados (quem foi desligado no painel sai de autorizados e segue bloqueado).
+    try{
+      var az=await fbDB.ref('autorizados/'+user).once('value');
+      if(az.val()===true && USUARIOS_RESERVA[user]) return {ok:true, nome:USUARIOS_RESERVA[user]};
+    }catch(e3){}
     return {ok:false};
   }catch(e){
     if(mIsPermDenied(e)){
@@ -1404,6 +1417,10 @@ async function rosterCarregar(){
     var snap=await fbDB.ref('membros_publico').once('value');
     var v=snap.val();
     if(!v) return; // vazio/indisponível: mantém o HTML estático
+    // 2026-10-12 (incidente): lista pública com menos nomes que a reserva = importação incompleta → mantém o estático
+    var nPub=Object.keys(v).filter(function(k){ return v[k] && v[k].nome; }).length;
+    var temPres=Object.keys(v).some(function(k){ return v[k] && v[k].papel==='presidente'; });
+    if(!temPres || nPub < Math.ceil(Object.keys(USUARIOS_RESERVA).length/2)){ console.warn('[roster] lista pública incompleta ('+nPub+'), mantendo a estática'); return; }
     rosterRender(Object.keys(v).map(function(k){ return v[k]; }).filter(function(m){ return m && m.nome; }));
   }catch(e){ console.warn('[roster] mantendo lista estática:', e && e.message); }
 }
@@ -1478,6 +1495,12 @@ function membrosAdminRender(){
     });
     h+='</tbody></table></div>';
   }
+  var faltam=Object.keys(USUARIOS_RESERVA).filter(function(l){ return !db[l]; });
+  if(logins.length && faltam.length){
+    h+='<div class="alert-box alert-partial" style="margin-top:12px"><span class="ic">&#9888;&#65039;</span><div><b>A lista do Firebase está incompleta:</b> faltam '+faltam.length+' membro(s) da lista fixa ('+mEsc(faltam.join(', '))+').<br>'
+      +'<button class="primary" style="margin-top:8px;padding:8px 14px" onclick="membrosImportar()">Completar lista (importar os '+faltam.length+' que faltam)</button></div></div>';
+  }
+  if(!logins.length){ h+='<div id="membrosAdminMsg" style="font-size:12px;margin-top:10px;min-height:16px"></div></div>'; box.innerHTML=h; return; } // sem "Adicionar" antes de importar
   h+='<div style="margin-top:16px;padding-top:12px;border-top:1px dashed var(--line)">';
   h+='<div style="font-weight:800;color:var(--navy);margin-bottom:6px">Adicionar membro</div>';
   h+='<div style="font-size:11.5px;color:var(--muted);margin-bottom:8px;line-height:1.5">Antes: crie a conta em Firebase Console → Authentication → Add user, com e-mail <code>&lt;login&gt;@comissaohps.local</code> e senha provisória exclusiva. '
@@ -1532,6 +1555,7 @@ async function membrosAdicionar(){
   try{
     initFirebase(); await waitForAuth();
     var login=String(document.getElementById('mNovoLogin').value||'').trim().toLowerCase();
+    if(!MEMBROS_DB || !Object.keys(MEMBROS_DB).length) throw new Error('Importe a lista atual antes de adicionar alguém.');
     if(MEMBROS_DB && MEMBROS_DB[login]) throw new Error('Esse login já existe na lista. Edite a linha dele acima.');
     await membroGravar(login,{nome:document.getElementById('mNovoNome').value,papel:document.getElementById('mNovoPapel').value,
       visivel:document.getElementById('mNovoVis').checked,auditor:document.getElementById('mNovoAud').checked,ativo:true});
@@ -1539,10 +1563,12 @@ async function membrosAdicionar(){
   }catch(e){ mMsg('Erro ao adicionar: '+(mIsPermDenied(e)?'permissão negada (as regras novas do Firebase já foram publicadas?)':(e.message||e)),false); }
 }
 async function membrosImportar(){
-  if(!confirm('Importar os '+Object.keys(USUARIOS_RESERVA).length+' membros da lista fixa para o Firebase?')) return;
   try{
     initFirebase(); await waitForAuth();
-    var logins=Object.keys(USUARIOS_RESERVA);
+    var snapAt=await fbDB.ref('membros').once('value'); MEMBROS_DB=snapAt.val()||{};
+    var logins=Object.keys(USUARIOS_RESERVA).filter(function(l){ return !MEMBROS_DB[l]; }); // só quem falta
+    if(!logins.length){ await membrosAposGravar('✔ Lista já completa.'); return; }
+    if(!confirm('Importar '+logins.length+' membro(s) da lista fixa para o Firebase?\n'+logins.join(', '))) return;
     for(var i=0;i<logins.length;i++){
       var l=logins[i];
       await membroGravar(l,{nome:USUARIOS_RESERVA[l],papel:MEMBROS_RESERVA_PAPEL[l]||'membro',visivel:true,auditor:true,ativo:true});
@@ -3685,19 +3711,12 @@ async function autoSelBuscar(){
     var num=String(r.numAtendimento).trim();
     autoSelShown.push(num);
     var attEl=$('attendance'); if(attEl) attEl.value=num;
-    var sm=autoSelSetorMatch(r.clinica);
-    var setor=sm.setor;
-    if(setor){
-      selSetores=[setor]; setorItens={}; setorItens[setor]={online:'todos',fisico:'todos'};
-      renderSectorMsel(); renderSectorItemsPanel();
-    }
-    var di=dashParseDate(r.dataInicio);
-    var diTxt=di?(pad(di.getDate())+'/'+pad(di.getMonth()+1)+'/'+di.getFullYear()):'—';
+    // 2026-10-12: card simplificado a pedido do Gabriel — só o número + instrução.
+    // O setor NÃO é mais preenchido automaticamente (a correspondência clínica→setor confundia);
+    // o auditor confirma setor, tipo de internação e data. autoSelSetorMatch() segue disponível se quiser reativar.
     if(st) st.innerHTML='<div class="alert-box alert-ok"><span class="ic">🎯</span><div>'+
       '<b>Atendimento sorteado: '+escapeHtml(num)+'</b><br>'+
-      'Clínica: <b>'+escapeHtml(String(r.clinica||'—'))+'</b> · Tipo: <b>'+escapeHtml(String(r.tipoAtendimento||'—'))+'</b> · Mês: <b>'+escapeHtml(dashMesLabel(r.mesEff||''))+'</b> · Início: <b>'+diTxt+'</b><br>'+
-      (setor?('Setor preenchido: <b>'+escapeHtml(setor)+'</b>. '):(sm.cands.length?('<span style="color:#7A5A0A;font-weight:700">Clínica ambígua — selecione o setor manualmente. Prováveis: '+sm.cands.map(escapeHtml).join(' · ')+'. </span>'):'<span style="color:#7A5A0A;font-weight:700">Não encontrei um setor da lista correspondente a esta clínica — selecione o setor manualmente. </span>'))+
-      'Confira o <b>tipo de internação</b> e os demais campos antes de iniciar. Restam <b>'+(pool.length-1)+'</b> atendimento(s) não auditado(s) neste recorte.'+
+      'Agora confirme o <b>setor auditado</b>, o <b>tipo de internação</b> e a <b>data da auditoria</b> para prosseguir com a auditoria.'+
       '<div style="margin-top:8px"><button type="button" class="secondary" onclick="autoSelBuscar()" style="padding:8px 14px;font-size:12px">🔁 Buscar outro</button></div>'+
       '</div></div>';
     try{ checkAttendance(); }catch(e){}
