@@ -2009,7 +2009,7 @@ async function afterLogin(){
   // Atualizar avatar no header se existir no cache
   const hav=$('headerAvatar');
   if(hav&&(_profileCache.foto||localStorage.getItem('avatar_'+currentUser.login))){
-    const foto=_profileCache.foto||localStorage.getItem('avatar_'+currentUser.login);
+    const foto=safeImgSrc(_profileCache.foto||localStorage.getItem('avatar_'+currentUser.login));
     if(foto) hav.innerHTML=`<img src="${foto}" style="width:100%;height:100%;object-fit:cover" alt="foto">`;
   }
   registerOnline();
@@ -2069,14 +2069,14 @@ let _profileCache={};
 async function loadProfileFromFirebase(){
   // Sempre tenta localStorage como cache imediato
   const key='profile_'+currentUser.login;
-  try{ _profileCache=JSON.parse(localStorage.getItem(key)||'{}'); }catch(e){ _profileCache={}; }
+  try{ _profileCache=perfilLimpo(JSON.parse(localStorage.getItem(key)||'{}')); }catch(e){ _profileCache={}; }
 
   // Depois busca do Firebase e atualiza
   if(!fbDB||!currentUser) return _profileCache;
   try{
     const snap=await fbDB.ref('perfis/'+currentUser.login).once('value');
     if(snap.exists()){
-      _profileCache={..._profileCache,...snap.val()};
+      _profileCache=perfilLimpo({..._profileCache,...snap.val()});
       localStorage.setItem(key, JSON.stringify(_profileCache));
     }
   }catch(e){ console.warn('Firebase perfil offline, usando cache local.'); }
@@ -2090,7 +2090,7 @@ function getProfileData(){
 
 async function saveProfileData(obj){
   const key='profile_'+currentUser.login;
-  _profileCache={..._profileCache,...obj};
+  _profileCache=perfilLimpo({..._profileCache,...obj});
   // Salvar localmente (imediato)
   localStorage.setItem(key, JSON.stringify(_profileCache));
   // Salvar no Firebase
@@ -2110,8 +2110,8 @@ function buildProfilePage(){
   const name=currentUser.name;
   const initials=name.split(' ').map(p=>p[0]).join('').slice(0,2).toUpperCase();
   const avatarKey='avatar_'+currentUser.login;
-  const pd=getProfileData();
-  const savedAvatar=pd.foto||localStorage.getItem(avatarKey);
+  const pd=perfilLimpo(getProfileData());
+  const savedAvatar=safeImgSrc(pd.foto||localStorage.getItem(avatarKey));
   const avatarHtml=savedAvatar
     ? `<img src="${savedAvatar}" style="width:100%;height:100%;object-fit:cover" alt="foto">`
     : `<span>${initials}</span>`;
@@ -2133,15 +2133,15 @@ function buildProfilePage(){
           ${avatarHtml}
         </div>
         <div style="flex:1;min-width:0">
-          <div class="profile-name">${name}</div>
-          <div id="viewCargo" class="profile-role">${pd.cargo||'Membro — Comissão de Revisão de Prontuários'}</div>
-          <div id="viewEmail" style="font-size:12px;color:var(--blue);margin-top:2px">${pd.email||currentUser.login+'@comissaohps'}</div>
-          <div id="viewTelefone" style="font-size:12px;color:var(--muted);margin-top:2px">${pd.telefone?'📞 '+pd.telefone:''}</div>
-          <div id="viewEspecialidade" style="font-size:12px;color:var(--muted);margin-top:2px">${pd.especialidade?'🏥 '+pd.especialidade:''}</div>
+          <div class="profile-name">${escapeHtml(name)}</div>
+          <div id="viewCargo" class="profile-role">${escapeHtml(pd.cargo||'Membro — Comissão de Revisão de Prontuários')}</div>
+          <div id="viewEmail" style="font-size:12px;color:var(--blue);margin-top:2px">${escapeHtml(pd.email||currentUser.login+'@comissaohps')}</div>
+          <div id="viewTelefone" style="font-size:12px;color:var(--muted);margin-top:2px">${pd.telefone?'📞 '+escapeHtml(pd.telefone):''}</div>
+          <div id="viewEspecialidade" style="font-size:12px;color:var(--muted);margin-top:2px">${pd.especialidade?'🏥 '+escapeHtml(pd.especialidade):''}</div>
         </div>
       </div>
       <input type="file" id="avatarInput" accept="image/*" style="display:none" onchange="saveAvatar(this)">
-      ${pd.bio?`<div style="margin-top:14px;padding:12px 14px;background:var(--soft);border-radius:10px;font-size:13px;color:var(--ink);line-height:1.6">${pd.bio}</div>`:''}
+      ${pd.bio?`<div style="margin-top:14px;padding:12px 14px;background:var(--soft);border-radius:10px;font-size:13px;color:var(--ink);line-height:1.6;white-space:pre-wrap">${escapeHtml(pd.bio)}</div>`:''}
     </div>
 
     <!-- Formulário de edição (oculto por padrão) -->
@@ -2149,24 +2149,24 @@ function buildProfilePage(){
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:4px">
         <div class="login-field">
           <label>Cargo / Função</label>
-          <input id="editCargo" type="text" value="${pd.cargo||''}" placeholder="Ex.: Enfermeira auditora">
+          <input id="editCargo" type="text" value="${escapeHtml(pd.cargo||'')}" placeholder="Ex.: Enfermeira auditora">
         </div>
         <div class="login-field">
           <label>E-mail</label>
-          <input id="editEmail" type="email" value="${pd.email||''}" placeholder="seu@email.com">
+          <input id="editEmail" type="email" value="${escapeHtml(pd.email||'')}" placeholder="seu@email.com">
         </div>
         <div class="login-field">
           <label>Telefone / WhatsApp</label>
-          <input id="editTelefone" type="tel" value="${pd.telefone||''}" placeholder="(19) 9 0000-0000">
+          <input id="editTelefone" type="tel" value="${escapeHtml(pd.telefone||'')}" placeholder="(19) 9 0000-0000">
         </div>
         <div class="login-field">
           <label>Especialidade / Área</label>
-          <input id="editEspecialidade" type="text" value="${pd.especialidade||''}" placeholder="Ex.: Enfermagem, Fisioterapia…">
+          <input id="editEspecialidade" type="text" value="${escapeHtml(pd.especialidade||'')}" placeholder="Ex.: Enfermagem, Fisioterapia…">
         </div>
       </div>
       <div class="login-field" style="margin-top:4px">
         <label>Sobre mim (opcional)</label>
-        <textarea id="editBio" placeholder="Apresentação breve, interesses, área de atuação…" style="width:100%;border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:13px;resize:vertical;min-height:70px;outline:none;transition:.15s" onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--line)'">${pd.bio||''}</textarea>
+        <textarea id="editBio" placeholder="Apresentação breve, interesses, área de atuação…" style="width:100%;border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:13px;resize:vertical;min-height:70px;outline:none;transition:.15s" onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--line)'">${escapeHtml(pd.bio||'')}</textarea>
       </div>
       <div style="display:flex;gap:10px;margin-top:12px">
         <button onclick="saveProfileEdit()" class="login-btn" style="flex:1;margin:0;padding:10px">Salvar alterações</button>
@@ -2226,7 +2226,7 @@ function updateSobreWelcome(){
   if(role) role.textContent=pd.cargo||'Membro — Comissão de Revisão de Prontuários';
 
   if(avatar){
-    const savedFoto=pd.foto||localStorage.getItem('avatar_'+currentUser.login);
+    const savedFoto=safeImgSrc(pd.foto||localStorage.getItem('avatar_'+currentUser.login));
     const initials=currentUser.name.split(' ').map(p=>p[0]).join('').slice(0,2).toUpperCase();
     avatar.innerHTML=savedFoto
       ? '<img src="'+savedFoto+'" style="width:100%;height:100%;object-fit:cover" alt="foto">'
@@ -2356,18 +2356,18 @@ async function loadMembros(){
 
   let cards='';
   membros.forEach(function(m){
-    const pd=perfis[m.login]||{};
+    const pd=perfilLimpo(perfis[m.login]||{});
     const initials=m.nome.split(' ').map(function(p){return p[0];}).join('').slice(0,2).toUpperCase();
     const isMe=currentUser&&currentUser.login===m.login;
-    const avatarInner=pd.foto
-      ? '<img src="'+pd.foto+'" style="width:100%;height:100%;object-fit:cover">'
+    const avatarInner=safeImgSrc(pd.foto)
+      ? '<img src="'+safeImgSrc(pd.foto)+'" style="width:100%;height:100%;object-fit:cover">'
       : '<span style="font-size:18px;font-weight:900;color:#fff">'+initials+'</span>';
 
     cards+='<div class="member-card'+(isMe?' is-me':'')+'" data-login="'+mEsc(m.login)+'" data-nome="'+mEsc(m.nome)+'" onclick="viewMemberProfile(this)">'
       +'<div class="member-avatar">'+avatarInner+'</div>'
       +'<div class="member-name">'+mEsc(m.nome)+'</div>'
-      +(pd.cargo?'<div class="member-cargo">'+pd.cargo+'</div>':'')
-      +(pd.especialidade?'<div class="member-spec">'+pd.especialidade+'</div>':'')
+      +(pd.cargo?'<div class="member-cargo">'+escapeHtml(pd.cargo)+'</div>':'')
+      +(pd.especialidade?'<div class="member-spec">'+escapeHtml(pd.especialidade)+'</div>':'')
       +(isMe?'<div class="member-me-badge">● Você</div>':'')
       +'</div>';
   });
@@ -2390,19 +2390,19 @@ async function viewMemberProfile(el){
   if(fbDB){
     try{
       const snap=await fbDB.ref('perfis/'+login).once('value');
-      if(snap.exists()) pd=snap.val();
+      if(snap.exists()) pd=perfilLimpo(snap.val());
     }catch(e){}
   }
   // Também verificar avatar no localStorage (caso não esteja no Firebase)
   if(!pd.foto){
     const localAvatar=localStorage.getItem('avatar_'+login);
-    if(localAvatar) pd.foto=localAvatar;
+    if(safeImgSrc(localAvatar)) pd.foto=localAvatar;
   }
 
   const initials=name.split(' ').map(p=>p[0]).join('').slice(0,2).toUpperCase();
   const isMe=currentUser&&currentUser.login===login;
-  const avatarHtml=pd.foto
-    ? '<img src="'+pd.foto+'" style="width:100%;height:100%;object-fit:cover">'
+  const avatarHtml=safeImgSrc(pd.foto)
+    ? '<img src="'+safeImgSrc(pd.foto)+'" style="width:100%;height:100%;object-fit:cover">'
     : '<span style="font-size:24px;font-weight:900;color:#fff">'+initials+'</span>';
 
   panel.innerHTML=`<div class="member-profile-panel" style="margin-top:16px">
@@ -2410,15 +2410,15 @@ async function viewMemberProfile(el){
       <div style="display:flex;align-items:center;gap:16px">
         <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--cyan));display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;border:2px solid var(--line)">${avatarHtml}</div>
         <div>
-          <div style="font-size:18px;font-weight:900;color:var(--navy)">${name}</div>
-          <div style="font-size:12px;color:var(--muted);margin-top:2px">${pd.cargo||'Membro — Comissão de Revisão de Prontuários'}</div>
-          ${pd.especialidade?`<div style="font-size:12px;color:var(--blue);margin-top:2px">${pd.especialidade}</div>`:''}
-          ${pd.email?`<div style="font-size:11px;color:var(--muted);margin-top:2px">${pd.email}</div>`:''}
+          <div style="font-size:18px;font-weight:900;color:var(--navy)">${escapeHtml(name)}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">${escapeHtml(pd.cargo||'Membro — Comissão de Revisão de Prontuários')}</div>
+          ${pd.especialidade?`<div style="font-size:12px;color:var(--blue);margin-top:2px">${escapeHtml(pd.especialidade)}</div>`:''}
+          ${pd.email?`<div style="font-size:11px;color:var(--muted);margin-top:2px">${escapeHtml(pd.email)}</div>`:''}
         </div>
       </div>
       <button onclick="document.getElementById('memberProfilePanel').innerHTML=''" style="border:none;background:none;cursor:pointer;color:var(--muted);font-size:18px;padding:4px">✕</button>
     </div>
-    ${pd.bio?`<div style="background:var(--soft);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--ink);line-height:1.6;margin-bottom:12px">${pd.bio}</div>`:''}
+    ${pd.bio?`<div style="background:var(--soft);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--ink);line-height:1.6;margin-bottom:12px;white-space:pre-wrap">${escapeHtml(pd.bio)}</div>`:''}
     ${isMe?`<div style="text-align:center;margin-top:8px"><button onclick="show('login',null);buildProfilePage()" style="border:1.5px solid var(--blue);background:transparent;border-radius:10px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer;color:var(--blue);font-family:'DM Sans',sans-serif">Editar meu perfil</button></div>`:''}
   </div>`;
 }
@@ -2651,12 +2651,11 @@ function renderOnlineList(){
   }
   el.innerHTML = others.map(u=>{
     const pd = _profileCache || {};
-    const initials = u.name.split(' ').map(p=>p[0]).join('').slice(0,2).toUpperCase();
-    const loginEsc=u.login.replace(/'/g,"\\'");
-    const nameEsc=u.name.replace(/'/g,"\\'");
-    return '<div class="chat-conv-item" onclick="openDirectChat(&quot;'+loginEsc+'&quot;,&quot;'+nameEsc+'&quot;)">'
+    const nm = String(u.name||u.login||'');
+    const initials = escapeHtml(nm.split(' ').map(p=>p[0]).join('').slice(0,2).toUpperCase());
+    return '<div class="chat-conv-item" data-login="'+escapeHtml(u.login)+'" data-nome="'+escapeHtml(nm)+'" onclick="openDirectChat(this.dataset.login,this.dataset.nome)">'
       + '<div class="chat-conv-avatar">'+initials+'</div>'
-      + '<div class="chat-conv-info"><div class="chat-conv-name">'+u.name.split(' ')[0]+' '+u.name.split(' ').slice(-1)[0]+'</div>'
+      + '<div class="chat-conv-info"><div class="chat-conv-name">'+escapeHtml(nm.split(' ')[0]+' '+nm.split(' ').slice(-1)[0])+'</div>'
       + '<div class="chat-conv-preview" style="color:var(--green)">● online</div></div>'
       + '</div>';
   }).join('');
@@ -2674,13 +2673,13 @@ function renderRecentList(){
       return;
     }
     el.innerHTML = sorted.map(c=>{
-      const title = c.title || 'Grupo';
-      const preview = c.lastMsg || '';
-      const initials = title.split(' ').map(p=>p[0]).join('').slice(0,2).toUpperCase();
-      return '<div class="chat-conv-item" onclick="openConvById(&quot;'+c.channelId+'&quot;,&quot;'+title+'&quot;)">'
+      const title = String(c.title || 'Grupo');
+      const preview = String(c.lastMsg || '');
+      const initials = escapeHtml(title.split(' ').map(p=>p[0]).join('').slice(0,2).toUpperCase());
+      return '<div class="chat-conv-item" data-canal="'+escapeHtml(c.channelId)+'" data-titulo="'+escapeHtml(title)+'" onclick="openConvById(this.dataset.canal,this.dataset.titulo)">'
         + '<div class="chat-conv-avatar">'+initials+'</div>'
-        + '<div class="chat-conv-info"><div class="chat-conv-name">'+title+'</div>'
-        + '<div class="chat-conv-preview">'+preview+'</div></div>'
+        + '<div class="chat-conv-info"><div class="chat-conv-name">'+escapeHtml(title)+'</div>'
+        + '<div class="chat-conv-preview">'+escapeHtml(preview)+'</div></div>'
         + '</div>';
     }).join('');
   });
@@ -2749,8 +2748,8 @@ function openAddParticipant(){
   const allMembers = Object.entries(USUARIOS).filter(([k])=>k!==currentUser.login&&!_currentConvParticipants.includes(k));
   list.innerHTML = allMembers.map(([login, name])=>
     '<label style="display:flex;align-items:center;gap:10px;padding:7px 4px;cursor:pointer">'
-    + '<input type="checkbox" value="'+login+'" style="width:16px;height:16px;cursor:pointer">'
-    + '<span style="font-size:13px;font-weight:600">'+name+'</span></label>'
+    + '<input type="checkbox" value="'+escapeHtml(login)+'" style="width:16px;height:16px;cursor:pointer">'
+    + '<span style="font-size:13px;font-weight:600">'+escapeHtml(name)+'</span></label>'
   ).join('');
   modal.style.display = 'flex';
 }
@@ -2814,21 +2813,34 @@ function appendChatMsg(msg){
     content = '<div class="msg-bubble">'+escapeHtml(msg.text)+'</div>';
   } else if(msg.type==='image'||msg.type==='file'){
     const icon = msg.type==='image'?'🖼️':'📎';
-    content = '<a class="msg-bubble msg-file" href="'+(msg.url||'#')+'" target="_blank">'
+    const _u=safeHttpsUrl(msg.url);
+    content = '<a class="msg-bubble msg-file" href="'+(_u||'#')+'" target="_blank" rel="noopener noreferrer">'
       +icon+' <span class="msg-file-name">'+escapeHtml(msg.filename||'arquivo')+'</span></a>';
   } else if(msg.type==='audio'){
-    content = '<div class="msg-bubble msg-audio">🎤 <audio controls src="'+(msg.url||'')+'" style="height:26px;max-width:160px"></audio></div>';
+    content = '<div class="msg-bubble msg-audio">🎤 <audio controls src="'+safeHttpsUrl(msg.url)+'" style="height:26px;max-width:160px"></audio></div>';
   }
   const div = document.createElement('div');
   div.className = 'chat-msg '+(mine?'mine':'theirs');
   div.innerHTML = content
-    + '<div class="msg-meta">'+(mine?'Você':msg.name.split(' ')[0])
+    + '<div class="msg-meta">'+(mine?'Você':escapeHtml(String(msg.name||'').split(' ')[0]))
     + ' · '+time+'</div>';
   box.appendChild(div);
   box.scrollTop = box.scrollHeight;
 }
 
 function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+/* 2026-10-12 (segurança): dados de perfil/chat vêm de outros usuários → nunca entram crus no HTML.
+   Foto: só aceita imagem embutida (data:image/... base64), que é o que o upload de avatar gera.
+   URL: só https:// sem caracteres que quebrem o atributo. */
+function safeImgSrc(v){ v=String(v==null?'':v); return /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+\/=]+$/.test(v) ? v : ''; }
+function safeHttpsUrl(v){ v=String(v==null?'':v).trim(); return /^https:\/\/[^\s"'<>`]+$/i.test(v) ? v : ''; }
+function perfilLimpo(o){
+  o=Object.assign({}, o||{});
+  ['cargo','especialidade','email','telefone'].forEach(function(k){ if(o[k]!=null) o[k]=String(o[k]).slice(0,120); });
+  if(o.bio!=null) o.bio=String(o.bio).slice(0,1000);
+  if(o.foto!=null && !safeImgSrc(o.foto)) delete o.foto;
+  return o;
+}
 
 /* Caminho real das mensagens no banco.
    Antes gravava na RAIZ (ex.: /gabrielcm_julianocar), que as regras negam.
