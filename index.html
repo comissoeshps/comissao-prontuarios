@@ -1909,7 +1909,7 @@ function completeLogin(user){
       ? '<img src="'+savedAvatar+'" style="width:100%;height:100%;object-fit:cover" alt="foto">'
       : '<span>'+initials+'</span>';
   }
-  if(hrole){const pd2=getProfileData(); if(pd2.cargo) hrole.textContent=pd2.cargo;}
+  if(hrole){ setorAplicarCabecalho(); }
   updateSobreWelcome();
   const sairBtn=$('tab-sair');
   if(sairBtn) sairBtn.style.display='flex';
@@ -2061,7 +2061,7 @@ async function afterLogin(){
   setTimeout(updateSobreWelcome, 200);
   // Atualizar o headerRole com o cargo salvo
   const hrole=$('headerRole');
-  if(hrole&&_profileCache.cargo) hrole.textContent=_profileCache.cargo;
+  if(hrole) setorAplicarCabecalho();
   // Atualizar avatar no header se existir no cache
   const hav=$('headerAvatar');
   if(hav&&(_profileCache.foto||localStorage.getItem('avatar_'+currentUser.login))){
@@ -2191,7 +2191,8 @@ function buildProfilePage(){
         </div>
         <div style="flex:1;min-width:0">
           <div class="profile-name">${escapeHtml(name)}</div>
-          <div id="viewCargo" class="profile-role">${escapeHtml(pd.cargo||'Membro — Comissão de Revisão de Prontuários')}</div>
+          <div id="viewSetor" class="profile-role">${escapeHtml(setorDoPerfil(pd)||SETOR_PADRAO_TXT)}</div>
+          <div id="viewCargo" style="font-size:12px;color:var(--muted);margin-top:2px">${pd.cargo?escapeHtml(pd.cargo):''}</div>
           <div id="viewEmail" style="font-size:12px;color:var(--blue);margin-top:2px">${escapeHtml(pd.email||currentUser.login+'@comissaohps')}</div>
           <div id="viewTelefone" style="font-size:12px;color:var(--muted);margin-top:2px">${pd.telefone?'📞 '+escapeHtml(pd.telefone):''}</div>
           <div id="viewEspecialidade" style="font-size:12px;color:var(--muted);margin-top:2px">${pd.especialidade?'🏥 '+escapeHtml(pd.especialidade):''}</div>
@@ -2204,6 +2205,11 @@ function buildProfilePage(){
     <!-- Formulário de edição (oculto por padrão) -->
     <div id="profileEdit" style="display:none">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:4px">
+        <div class="login-field" style="grid-column:1/-1">
+          <label>Setor de atuação (aparece abaixo do seu nome)</label>
+          <select id="editSetor" onchange="setorSelMudou()" style="width:100%;border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:13px;background:var(--card);color:var(--ink)">${setorOpcoesHtml(pd.setor)}</select>
+          <input id="editSetorOutro" type="text" maxlength="120" value="${(pd.setor&&SETORES.indexOf(pd.setor)<0)?escapeHtml(pd.setor):''}" placeholder="Escreva o nome do setor" style="margin-top:8px;display:${(pd.setor&&SETORES.indexOf(pd.setor)<0)?'block':'none'}">
+        </div>
         <div class="login-field">
           <label>Cargo / Função</label>
           <input id="editCargo" type="text" value="${escapeHtml(pd.cargo||'')}" placeholder="Ex.: Enfermeira auditora">
@@ -2280,7 +2286,7 @@ function updateSobreWelcome(){
   if(greeting) greeting.textContent=getGreeting()+', '+currentUser.name.split(' ')[0]+'! Bem-vindo(a) à Comissão de Revisão de Prontuários.';
 
   const pd=getProfileData();
-  if(role) role.textContent=pd.cargo||'Membro — Comissão de Revisão de Prontuários';
+  if(role) role.textContent=setorDoPerfil(pd)||SETOR_PADRAO_TXT;
 
   if(avatar){
     const savedFoto=safeImgSrc(pd.foto||localStorage.getItem('avatar_'+currentUser.login));
@@ -2308,13 +2314,17 @@ async function saveProfileEdit(){
   const telefone=document.getElementById('editTelefone')?.value.trim()||'';
   const especialidade=document.getElementById('editEspecialidade')?.value.trim()||'';
   const bio=document.getElementById('editBio')?.value.trim()||'';
+  const _selSetor=document.getElementById('editSetor')?.value||'';
+  const setor=(_selSetor==='__outro__' ? (document.getElementById('editSetorOutro')?.value||'') : _selSetor).trim().replace(/\s+/g,' ').slice(0,120);
 
   const btn=$('btnEditProfile');
   if(btn){btn.textContent='Salvando…';btn.disabled=true;}
-  await saveProfileData({cargo,email,telefone,especialidade,bio});
+  await saveProfileData({cargo,email,telefone,especialidade,bio,setor});
+  setorAplicarCabecalho();
+  const vSetor=$('viewSetor'); if(vSetor) vSetor.textContent=setor||SETOR_PADRAO_TXT;
 
   // Atualizar view sem rebuildar a página inteira
-  const vCargo=$('viewCargo'); if(vCargo) vCargo.textContent=cargo||'Membro — Comissão de Revisão de Prontuários';
+  const vCargo=$('viewCargo'); if(vCargo) vCargo.textContent=cargo||'';
   const vEmail=$('viewEmail'); if(vEmail) vEmail.textContent=email||currentUser.login+'@comissaohps';
   const vTel=$('viewTelefone'); if(vTel) vTel.textContent=telefone?'📞 '+telefone:'';
   const vEsp=$('viewEspecialidade'); if(vEsp) vEsp.textContent=especialidade?'🏥 '+especialidade:'';
@@ -2423,7 +2433,8 @@ async function loadMembros(){
     cards+='<div class="member-card'+(isMe?' is-me':'')+'" data-login="'+mEsc(m.login)+'" data-nome="'+mEsc(m.nome)+'" onclick="viewMemberProfile(this)">'
       +'<div class="member-avatar">'+avatarInner+'</div>'
       +'<div class="member-name">'+mEsc(m.nome)+'</div>'
-      +(pd.cargo?'<div class="member-cargo">'+escapeHtml(pd.cargo)+'</div>':'')
+      +(pd.setor?'<div class="member-cargo">'+escapeHtml(pd.setor)+'</div>':'')
+      +(pd.cargo?'<div class="member-spec">'+escapeHtml(pd.cargo)+'</div>':'')
       +(pd.especialidade?'<div class="member-spec">'+escapeHtml(pd.especialidade)+'</div>':'')
       +(isMe?'<div class="member-me-badge">● Você</div>':'')
       +'</div>';
@@ -2468,7 +2479,7 @@ async function viewMemberProfile(el){
         <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--cyan));display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;border:2px solid var(--line)">${avatarHtml}</div>
         <div>
           <div style="font-size:18px;font-weight:900;color:var(--navy)">${escapeHtml(name)}</div>
-          <div style="font-size:12px;color:var(--muted);margin-top:2px">${escapeHtml(pd.cargo||'Membro — Comissão de Revisão de Prontuários')}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">${escapeHtml(pd.setor||'Setor não informado')}${pd.cargo?' · '+escapeHtml(pd.cargo):''}</div>
           ${pd.especialidade?`<div style="font-size:12px;color:var(--blue);margin-top:2px">${escapeHtml(pd.especialidade)}</div>`:''}
           ${pd.email?`<div style="font-size:11px;color:var(--muted);margin-top:2px">${escapeHtml(pd.email)}</div>`:''}
         </div>
@@ -2891,9 +2902,31 @@ function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,
    URL: só https:// sem caracteres que quebrem o atributo. */
 function safeImgSrc(v){ v=String(v==null?'':v); return /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+\/=]+$/.test(v) ? v : ''; }
 function safeHttpsUrl(v){ v=String(v==null?'':v).trim(); return /^https:\/\/[^\s"'<>`]+$/i.test(v) ? v : ''; }
+
+/* 2026-10-12: setor de atuação definido pelo próprio membro (perfis/<login>/setor).
+   Aparece abaixo do nome no cabeçalho, na boas-vindas, no perfil e nos cards. */
+var SETOR_PADRAO_TXT='Setor não informado — defina em "Ver meu perfil"';
+function setorDoPerfil(pd){ var v=String((pd&&pd.setor)||'').trim(); return v; }
+function setorAplicarCabecalho(){
+  var pd=getProfileData(); var st=setorDoPerfil(pd);
+  var h=document.getElementById('headerRole'); if(h) h.textContent=st||SETOR_PADRAO_TXT;
+  var r=document.getElementById('sobreRole'); if(r) r.textContent=st||SETOR_PADRAO_TXT;
+}
+function setorOpcoesHtml(atual){
+  atual=String(atual||'');
+  var naLista=SETORES.indexOf(atual)>=0;
+  var h='<option value=""'+(atual?'':' selected')+'>Selecione seu setor</option>';
+  SETORES.forEach(function(x){ h+='<option value="'+escapeHtml(x)+'"'+(x===atual?' selected':'')+'>'+escapeHtml(x)+'</option>'; });
+  h+='<option value="__outro__"'+(atual&&!naLista?' selected':'')+'>Outro (escrever)</option>';
+  return h;
+}
+function setorSelMudou(){
+  var sel=document.getElementById('editSetor'), o=document.getElementById('editSetorOutro');
+  if(sel && o) o.style.display = sel.value==='__outro__' ? 'block' : 'none';
+}
 function perfilLimpo(o){
   o=Object.assign({}, o||{});
-  ['cargo','especialidade','email','telefone'].forEach(function(k){ if(o[k]!=null) o[k]=String(o[k]).slice(0,120); });
+  ['cargo','especialidade','email','telefone','setor'].forEach(function(k){ if(o[k]!=null) o[k]=String(o[k]).slice(0,120); });
   if(o.bio!=null) o.bio=String(o.bio).slice(0,1000);
   if(o.foto!=null && !safeImgSrc(o.foto)) delete o.foto;
   return o;
