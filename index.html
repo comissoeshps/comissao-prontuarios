@@ -661,9 +661,17 @@ tr:hover td{background:#FAFCFF}
 
     <!-- TELA 1: Login normal -->
     <div id="loginScreen">
+      <div id="conviteAviso" style="display:none;background:#EAF7EE;border:1px solid #BFE3C8;border-radius:10px;padding:12px 14px;font-size:12.5px;color:#17633A;margin-bottom:14px;line-height:1.5">
+        🎟️ <b>Você recebeu um convite</b> para a Comissão de Revisão de Prontuários. Clique em <b>Entrar com Google</b> abaixo e escolha a sua conta Google.
+      </div>
       <div class="login-field"><label>Usuário</label><input id="loginUser" type="text" placeholder="Ex.: João da Silva → joaods" onkeydown="tryLoginKey(event)" autocomplete="username"></div>
       <div class="login-field"><label>Senha</label><div class="pw-wrap"><input id="loginPass" type="password" placeholder="••••••••" onkeydown="tryLoginKey(event)" autocomplete="current-password"><button type="button" class="pw-eye" data-for="loginPass" title="Mostrar senha" onclick="togglePw('loginPass',this)">👁</button></div></div>
       <button class="login-btn" onclick="tryLogin()">Entrar</button>
+      <div style="display:flex;align-items:center;gap:10px;margin:14px 0 10px;color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.06em"><span style="flex:1;height:1px;background:var(--line)"></span>OU<span style="flex:1;height:1px;background:var(--line)"></span></div>
+      <button type="button" id="btnGoogle" onclick="entrarComGoogle()" style="width:100%;display:flex;align-items:center;justify-content:center;gap:10px;border:1.5px solid var(--line);background:#fff;border-radius:12px;padding:11px 14px;font-size:14px;font-weight:700;cursor:pointer;color:#3c4043;font-family:'DM Sans',sans-serif">
+        <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
+        Entrar com Google
+      </button>
       <div id="loginErr" class="login-error"></div>
       <div style="text-align:center;margin-top:14px">
         <button onclick="showForgotInfo()" style="background:none;border:none;cursor:pointer;color:var(--blue);font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;text-decoration:underline">Esqueci minha senha</button>
@@ -1333,7 +1341,7 @@ function membrosAplicar(db){
   logins.forEach(function(login){
     var m=MEMBROS_DB[login]; if(!m || m.ativo===false || !m.nome) return;
     novos[login]=m.nome;
-    if(m.auditor!==false) auds.push(m.nome);
+    if(m.auditor!==false && m.oculto!==true) auds.push(m.nome);
   });
   // lista parcial: quem está na reserva e AINDA NÃO está no Firebase continua valendo
   Object.keys(USUARIOS_RESERVA).forEach(function(l){
@@ -1354,7 +1362,8 @@ function membrosAplicar(db){
 function membrosParaGrade(){
   var lista=[];
   if(MEMBROS_DB && Object.keys(MEMBROS_DB).length){
-    Object.keys(MEMBROS_DB).forEach(function(l){ var m=MEMBROS_DB[l]; if(m && m.ativo!==false && m.nome) lista.push({login:l,nome:m.nome}); });
+    var _dono=!!(currentUser && currentUser.login===OWNER_LOGIN);
+    Object.keys(MEMBROS_DB).forEach(function(l){ var m=MEMBROS_DB[l]; if(m && m.ativo!==false && m.nome && (m.oculto!==true || _dono)) lista.push({login:l,nome:m.nome,oculto:m.oculto===true}); });
     Object.keys(USUARIOS_RESERVA).forEach(function(l){ if(!MEMBROS_DB[l]) lista.push({login:l,nome:USUARIOS_RESERVA[l]}); });
   } else {
     Object.keys(USUARIOS_RESERVA).forEach(function(l){ lista.push({login:l,nome:USUARIOS_RESERVA[l]}); });
@@ -1481,8 +1490,8 @@ function membrosAdminRender(){
     h+='<div class="alert-box alert-partial" style="margin-bottom:12px"><span class="ic">&#9888;&#65039;</span><div>A lista de membros ainda não está no Firebase. O site está usando a lista fixa do código.<br>'
       +'<button class="primary" style="margin-top:8px;padding:8px 14px" onclick="membrosImportar()">Importar lista atual ('+Object.keys(USUARIOS_RESERVA).length+' membros)</button></div></div>';
   } else {
-    var lista=logins.map(function(l){ var m=db[l]||{}; return {login:l,nome:m.nome||'',papel:m.papel||'membro',visivel:m.visivel!==false,auditor:m.auditor!==false,ativo:m.ativo!==false}; }).sort(mCmpPapel);
-    h+='<div class="tablewrap"><table><thead><tr><th>Nome</th><th>Login</th><th>Papel</th><th title="Aparece na Página Inicial">Pág. inicial</th><th>Auditor</th><th>Acesso ativo</th><th></th></tr></thead><tbody>';
+    var lista=logins.map(function(l){ var m=db[l]||{}; return {login:l,nome:m.nome||'',papel:m.papel||'membro',visivel:m.visivel!==false,auditor:m.auditor!==false,ativo:m.ativo!==false,oculto:m.oculto===true}; }).sort(mCmpPapel);
+    h+='<div class="tablewrap"><table><thead><tr><th>Nome</th><th>Login</th><th>Papel</th><th title="Aparece na Página Inicial">Pág. inicial</th><th>Auditor</th><th title="Esconde o perfil na grade de Membros, no chat, na lista de auditores e na Página Inicial">Perfil oculto</th><th>Acesso ativo</th><th></th></tr></thead><tbody>';
     lista.forEach(function(m,i){
       var dono=m.login===OWNER_LOGIN;
       h+='<tr'+(m.ativo?'':' style="opacity:.55"')+'>'
@@ -1491,6 +1500,7 @@ function membrosAdminRender(){
         +'<td>'+mPapelSelect('mPapel_'+i,m.papel)+'</td>'
         +'<td style="text-align:center">'+mChk('mVis_'+i,m.visivel)+'</td>'
         +'<td style="text-align:center">'+mChk('mAud_'+i,m.auditor)+'</td>'
+        +'<td style="text-align:center">'+mChk('mOcu_'+i,m.oculto,dono)+'</td>'
         +'<td style="text-align:center">'+mChk('mAtv_'+i,m.ativo,dono)+'</td>'
         +'<td><button class="secondary" style="padding:6px 12px" onclick="membrosSalvarLinha('+i+',\''+m.login+'\')">Salvar</button></td>'
         +'</tr>';
@@ -1510,8 +1520,18 @@ function membrosAdminRender(){
     +'É só visual — não é barreira de segurança para os dados.</div></div>';
   if(!logins.length){ h+='<div id="membrosAdminMsg" style="font-size:12px;margin-top:10px;min-height:16px"></div></div>'; box.innerHTML=h; return; } // sem "Adicionar" antes de importar
   h+='<div style="margin-top:16px;padding-top:12px;border-top:1px dashed var(--line)">';
-  h+='<div style="font-weight:800;color:var(--navy);margin-bottom:6px">Adicionar membro</div>';
-  h+='<div style="font-size:11.5px;color:var(--muted);margin-bottom:8px;line-height:1.5">Antes: crie a conta em Firebase Console → Authentication → Add user, com e-mail <code>&lt;login&gt;@comissaohps.local</code> e senha provisória exclusiva. '
+  h+='<div style="font-weight:800;color:var(--navy);margin-bottom:6px">🎟️ Convidar membro (entra com a conta Google)</div>';
+  h+='<div style="font-size:11.5px;color:var(--muted);margin-bottom:8px;line-height:1.5">Gera um link de uso único, válido por 7 dias. Mande pelo WhatsApp: a pessoa abre, clica em <b>Entrar com Google</b> e já entra aprovada. Não precisa criar conta no Firebase.</div>';
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
+    +'<input id="cvNome" placeholder="Nome completo" maxlength="120" oninput="conviteSugerirLogin()" style="'+inp+';flex:1;min-width:220px">'
+    +'<input id="cvLogin" placeholder="login" maxlength="30" style="'+inp+';width:150px" autocomplete="off">'
+    +mPapelSelect('cvPapel','membro')
+    +'<button class="primary" style="padding:8px 14px" onclick="conviteCriar()">Gerar convite</button></div>';
+  h+='<div id="cvResultado" style="margin-top:10px"></div><div id="convitesLista" style="margin-top:10px;font-size:12px;color:var(--muted)">Carregando convites…</div></div>';
+  setTimeout(convitesCarregar,0);
+  h+='<div style="margin-top:16px;padding-top:12px;border-top:1px dashed var(--line)">';
+  h+='<div style="font-weight:800;color:var(--navy);margin-bottom:6px">Adicionar membro (login e senha, modo antigo)</div>';
+  h+='<div style="font-size:11.5px;color:var(--muted);margin-bottom:8px;line-height:1.5"><b style="color:var(--red)">Crie a conta no Authentication ANTES de adicionar aqui.</b> (Com a criação de contas ligada, um login liberado aqui sem conta poderia ser criado por outra pessoa.) Prefira o <b>convite</b> acima. Antes: crie a conta em Firebase Console → Authentication → Add user, com e-mail <code>&lt;login&gt;@comissaohps.local</code> e senha provisória exclusiva. '
     +'Depois: adicione aqui. <b>Não é preciso mexer no Apps Script</b> — ele consulta esta lista (vale em até 1 minuto).</div>';
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
     +'<input id="mNovoLogin" placeholder="login (ex.: ericadm)" maxlength="30" style="'+inp+';width:170px" autocomplete="off">'
@@ -1533,13 +1553,13 @@ async function membroGravar(login, dados){
   if(nome.length<3 || nome.length>120) throw new Error('Nome deve ter entre 3 e 120 caracteres.');
   var papel=MEMBRO_PAPEIS[dados.papel]?dados.papel:'membro';
   var ativo = login===OWNER_LOGIN ? true : !!dados.ativo;
-  var visivel=!!dados.visivel, auditor=!!dados.auditor;
+  var visivel=!!dados.visivel, auditor=!!dados.auditor, oculto=!!dados.oculto;
   var atual=(MEMBROS_DB&&MEMBROS_DB[login])||{};
   var pub=atual.pub || fbDB.ref('membros_publico').push().key;
   var ordem=typeof atual.ordem==='number'?atual.ordem:0;
   var upd={};
-  upd['membros/'+login]={nome:nome,papel:papel,visivel:visivel,auditor:auditor,ativo:ativo,ordem:ordem,pub:pub};
-  upd['membros_publico/'+pub]=(visivel&&ativo)?{nome:nome,papel:papel,ordem:ordem}:null;
+  upd['membros/'+login]={nome:nome,papel:papel,visivel:visivel,auditor:auditor,ativo:ativo,ordem:ordem,pub:pub,oculto:oculto};
+  upd['membros_publico/'+pub]=(visivel&&ativo&&!oculto)?{nome:nome,papel:papel,ordem:ordem}:null;
   upd['autorizados/'+login]=ativo?true:null;
   await fbDB.ref().update(upd);
   if(!MEMBROS_DB) MEMBROS_DB={};
@@ -1555,7 +1575,7 @@ async function membrosSalvarLinha(i,login){
   try{
     initFirebase(); await waitForAuth();
     var g=function(id){ return document.getElementById(id); };
-    await membroGravar(login,{nome:g('mNome_'+i).value,papel:g('mPapel_'+i).value,visivel:g('mVis_'+i).checked,auditor:g('mAud_'+i).checked,ativo:g('mAtv_'+i).checked});
+    await membroGravar(login,{nome:g('mNome_'+i).value,papel:g('mPapel_'+i).value,visivel:g('mVis_'+i).checked,auditor:g('mAud_'+i).checked,ativo:g('mAtv_'+i).checked,oculto:!!(g('mOcu_'+i)&&g('mOcu_'+i).checked)});
     await membrosAposGravar('✔ '+login+' salvo.');
   }catch(e){ mMsg('Erro ao salvar: '+(mIsPermDenied(e)?'permissão negada (as regras novas do Firebase já foram publicadas?)':(e.message||e)),false); }
 }
@@ -1585,6 +1605,311 @@ async function membrosImportar(){
   }catch(e){ mMsg('Erro na importação: '+(mIsPermDenied(e)?'permissão negada (as regras novas do Firebase já foram publicadas?)':(e.message||e)),false); }
 }
 
+
+
+/* === LOGIN COM GOOGLE + CONVITES (2026-10-13) ===================================
+   • Conta clássica (login@comissaohps.local) pode VINCULAR o Google no perfil → mesma conta, mesmo uid.
+   • Pessoa nova entra por CONVITE (link de uso único, 7 dias):
+       convites/<código> = {login,nome,papel,criadoEm,expira[,cancelado,usadoPor,usadoEm,emailGoogle]}
+       login_uid/<login> = 'pendente' → (no resgate) uid      ← reserva: o login NÃO vale por e-mail/senha
+       uid_login/<uid>   = {login, convite}                    ← liga a conta Google ao login
+     Regras do Firebase garantem: código válido, não vencido, não cancelado, uso único.
+   • Conta Google sem vínculo e sem convite é EXCLUÍDA na hora (não deixa conta solta no Authentication). */
+const CONVITE_KEY='hps_convite';
+const CONVITE_DIAS=7;
+function conviteDaUrl(){
+  try{
+    var m=/[?&]convite=([A-Za-z0-9_-]{24,64})/.exec(location.search);
+    if(m){ sessionStorage.setItem(CONVITE_KEY,m[1]); history.replaceState(null,'',location.pathname+location.hash); }
+  }catch(e){}
+  var c=''; try{ c=sessionStorage.getItem(CONVITE_KEY)||''; }catch(e){}
+  return c;
+}
+function conviteAvisoRender(){
+  var el=document.getElementById('conviteAviso'); if(!el) return;
+  var c=''; try{ c=sessionStorage.getItem(CONVITE_KEY)||''; }catch(e){}
+  el.style.display=(c && !currentUser)?'block':'none';
+}
+function googleProvider(){ var p=new firebase.auth.GoogleAuthProvider(); p.setCustomParameters({prompt:'select_account'}); return p; }
+function temSenha(u){ return !!(u && (u.providerData||[]).some(function(p){ return p && p.providerId==='password'; })); }
+function googleInfo(u){ return (u && (u.providerData||[]).find(function(p){ return p && p.providerId==='google.com'; })) || null; }
+function membroOculto(login){
+  if(currentUser && currentUser.login===OWNER_LOGIN) return false;
+  var m=MEMBROS_DB && MEMBROS_DB[login]; return !!(m && m.oculto===true);
+}
+function msgErroGoogle(e){
+  var c=(e&&e.code)||'';
+  if(c==='auth/popup-closed-by-user' || c==='auth/cancelled-popup-request') return '';
+  if(c==='auth/popup-blocked') return 'O navegador bloqueou a janela do Google. Permita pop-ups para este site e tente de novo.';
+  if(c==='auth/unauthorized-domain') return 'Este endereço ainda não está autorizado para login com Google. Avise a presidência.';
+  if(c==='auth/operation-not-allowed') return 'O login com Google ainda não foi ativado. Avise a presidência.';
+  if(c==='auth/network-request-failed') return 'Sem conexão. Verifique a internet e tente de novo.';
+  return '';
+}
+var MSG_SEM_CADASTRO='Esta conta Google não está cadastrada na plataforma.<br>• Se você já tem <b>usuário e senha</b>, entre com eles e vincule o Google em <b>"Ver meu perfil"</b>.<br>• Se você é novo(a) na Comissão, peça um <b>convite</b> à presidência.';
+
+/* Resgata o convite para a conta Google recém-logada. Retorna o login. Ordem exigida pelas regras. */
+async function conviteResgatar(code, u){
+  var snap=await fbDB.ref('convites/'+code).once('value');
+  var c=snap.val();
+  if(!c || !c.login) throw new Error('Convite inválido. Peça um novo link à presidência.');
+  if(c.cancelado===true) throw new Error('Este convite foi cancelado. Peça um novo link à presidência.');
+  if(c.usadoPor && c.usadoPor!==u.uid) throw new Error('Este convite já foi usado. Cada link vale para uma pessoa só — peça um novo à presidência.');
+  if(!c.usadoPor && Number(c.expira)<Date.now()) throw new Error('Este convite venceu. Peça um novo link à presidência.');
+  if(!c.usadoPor) await fbDB.ref('convites/'+code+'/usadoPor').set(u.uid);
+  var upd={};
+  upd['uid_login/'+u.uid]={login:c.login, convite:code};
+  upd['convites/'+code+'/usadoEm']=firebase.database.ServerValue.TIMESTAMP;
+  if(u.email) upd['convites/'+code+'/emailGoogle']=u.email;
+  try{ await fbDB.ref().update(upd); }catch(e){
+    // já resgatado antes (uid_login existe): segue
+    var j=(await fbDB.ref('uid_login/'+u.uid+'/login').once('value')).val();
+    if(j!==c.login) throw e;
+  }
+  try{ await fbDB.ref('login_uid/'+c.login).set(u.uid); }catch(e){ /* já concluído */ }
+  return c.login;
+}
+
+async function entrarComGoogle(){
+  var err=$('loginErr'), btn=document.getElementById('btnGoogle');
+  if(err) err.textContent='';
+  initFirebase();
+  if(!fbAuth){ if(err) err.textContent='Serviço indisponível. Recarregue a página.'; return; }
+  var code=''; try{ code=sessionStorage.getItem(CONVITE_KEY)||''; }catch(e){}
+  if(btn){ btn.disabled=true; btn.style.opacity='.6'; }
+  try{
+    var cred;
+    try{ cred=await fbAuth.signInWithPopup(googleProvider()); }
+    catch(e){
+      if(e && e.code==='auth/admin-restricted-operation'){
+        if(err) err.innerHTML = code
+          ? 'Não foi possível concluir o convite: a criação de contas novas está desativada no Firebase. Avise a presidência.'
+          : MSG_SEM_CADASTRO;
+        return;
+      }
+      var m=msgErroGoogle(e); if(err) err.textContent = m || (e && e.code ? ('Não foi possível entrar com Google ('+e.code+').') : '');
+      return;
+    }
+    var u=cred.user, email=String(u.email||'').toLowerCase(), login=null;
+    var nova=!!(cred.additionalUserInfo && cred.additionalUserInfo.isNewUser);
+    if(email.slice(-('@'+AUTH_EMAIL_DOMAIN).length)==='@'+AUTH_EMAIL_DOMAIN){
+      login=email.slice(0, -('@'+AUTH_EMAIL_DOMAIN).length);   // conta clássica com Google vinculado
+    } else {
+      try{ login=(await fbDB.ref('uid_login/'+u.uid+'/login').once('value')).val(); }catch(e){ login=null; }
+      if(login){ try{ await fbDB.ref('login_uid/'+login).set(u.uid); }catch(e){} }   // conclui resgate interrompido (idempotente)
+      if(!login && code){
+        try{ login=await conviteResgatar(code,u); }
+        catch(e){
+          try{ if(nova) await u.delete(); else await fbAuth.signOut(); }catch(_){ try{ await fbAuth.signOut(); }catch(__){} }
+          if(err) err.textContent=(e && e.message) || 'Não foi possível usar o convite.';
+          return;
+        }
+      }
+      if(!login){
+        try{ if(nova) await u.delete(); else await fbAuth.signOut(); }catch(_){ try{ await fbAuth.signOut(); }catch(__){} }
+        if(err) err.innerHTML=MSG_SEM_CADASTRO;
+        return;
+      }
+    }
+    if(!mLoginValido(login)){ try{ await fbAuth.signOut(); }catch(e){} if(err) err.textContent='Cadastro inválido. Avise a presidência.'; return; }
+    var acesso=await membroVerificarAcesso(login);
+    if(!acesso.ok){
+      try{ await fbAuth.signOut(); }catch(e){}
+      if(err) err.textContent='Seu acesso à plataforma não está ativo. Procure a presidência da Comissão.';
+      return;
+    }
+    USUARIOS[login]=acesso.nome;
+    try{ sessionStorage.removeItem(CONVITE_KEY); }catch(e){}
+    conviteAvisoRender();
+    clearLoginAttempts();
+    if(temSenha(u) && await needsPasswordChange(login)){ _pwChangeUser=login; showChangePasswordScreen(true); return; }
+    completeLogin(login);
+  } finally {
+    if(btn){ btn.disabled=false; btn.style.opacity=''; }
+  }
+}
+
+/* ---------- Perfil: vincular / desvincular Google ---------- */
+function googleBoxRender(msg, ok){
+  var el=document.getElementById('googleVinculoBox'); if(!el) return;
+  var u=fbAuth && fbAuth.currentUser;
+  if(!u){ el.style.display='none'; return; }
+  el.style.display='block';
+  var g=googleInfo(u), senha=temSenha(u);
+  var h='<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><div>';
+  if(g){
+    h+='<b style="color:var(--navy)">Conta Google vinculada</b><br><span style="color:var(--muted)">'+escapeHtml(g.email||'')+' — você pode usar <b>Entrar com Google</b>.</span>';
+    h+='</div>'+(senha
+      ? '<button class="secondary" style="padding:7px 12px" onclick="googleDesvincular()">Desvincular</button>'
+      : '<span style="font-size:11.5px;color:var(--muted)">Sua conta é só Google (não pode desvincular).</span>');
+  } else {
+    h+='<b style="color:var(--navy)">Entrar com Google</b><br><span style="color:var(--muted)">Vincule sua conta Google para entrar sem digitar senha. Seu usuário e senha continuam valendo.</span>';
+    h+='</div><button class="primary" style="padding:8px 14px" onclick="googleVincular()">Vincular conta Google</button>';
+  }
+  h+='</div>';
+  if(msg) h+='<div style="margin-top:8px;font-size:12px;color:'+(ok?'var(--green)':'var(--red)')+'">'+escapeHtml(msg)+'</div>';
+  el.innerHTML=h;
+}
+async function googleVincular(){
+  try{
+    initFirebase();
+    if(!fbAuth || !fbAuth.currentUser) throw {message:'Sessão expirada. Entre de novo.'};
+    await fbAuth.currentUser.linkWithPopup(googleProvider());
+    googleBoxRender('✔ Conta Google vinculada. Da próxima vez, use "Entrar com Google".', true);
+  }catch(e){
+    var c=(e&&e.code)||'', m=msgErroGoogle(e);
+    if(c==='auth/credential-already-in-use' || c==='auth/email-already-in-use')
+      m='Esta conta Google já está ligada a outro cadastro (provavelmente de um "Entrar com Google" antes do vínculo). Peça à presidência para excluí-lo em Firebase → Authentication e tente de novo.';
+    else if(c==='auth/provider-already-linked') m='Já existe uma conta Google vinculada a este usuário.';
+    else if(c==='auth/requires-recent-login') m='Por segurança, saia e entre de novo antes de vincular.';
+    else if(!m && c) m='Não foi possível vincular ('+c+').';
+    else if(!m && e && e.message) m=e.message;
+    googleBoxRender(m, false);
+  }
+}
+async function googleDesvincular(){
+  var u=fbAuth && fbAuth.currentUser; if(!u) return;
+  if(!temSenha(u)){ googleBoxRender('Sua conta é só Google; desvincular deixaria você sem acesso.', false); return; }
+  if(!confirm('Desvincular a conta Google? Você continuará entrando com usuário e senha.')) return;
+  try{ await u.unlink('google.com'); googleBoxRender('✔ Conta Google desvinculada.', true); }
+  catch(e){ googleBoxRender('Não foi possível desvincular ('+((e&&e.code)||'erro')+').', false); }
+}
+
+/* ---------- Primeiro acesso: pedir o setor ---------- */
+function setorPedirSeVazio(){
+  if(!currentUser) return;
+  if(setorDoPerfil(getProfileData())) return;
+  try{ if(sessionStorage.getItem('hps_setor_depois')==='1') return; }catch(e){}
+  if(document.getElementById('setorModal')) return;
+  var d=document.createElement('div');
+  d.id='setorModal';
+  d.style.cssText='position:fixed;inset:0;background:rgba(11,31,58,.45);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px';
+  d.innerHTML='<div style="background:var(--card);border-radius:16px;max-width:440px;width:100%;padding:20px;box-shadow:0 10px 40px rgba(0,0,0,.25)">'
+    +'<div style="font-weight:900;color:var(--navy);font-size:16px;margin-bottom:4px">Qual é o seu setor?</div>'
+    +'<div style="font-size:12.5px;color:var(--muted);margin-bottom:12px">Ele aparece abaixo do seu nome na plataforma. Dá para mudar depois em "Ver meu perfil".</div>'
+    +'<select id="smSetor" onchange="document.getElementById(\'smOutro\').style.display=this.value===\'__outro__\'?\'block\':\'none\'" style="width:100%;border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:13px;background:var(--card);color:var(--ink)">'+setorOpcoesHtml('')+'</select>'
+    +'<input id="smOutro" maxlength="120" placeholder="Escreva o nome do setor" style="display:none;margin-top:8px;width:100%;border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:13px">'
+    +'<div id="smErr" style="color:var(--red);font-size:12px;min-height:16px;margin-top:6px"></div>'
+    +'<div style="display:flex;gap:10px;margin-top:6px"><button class="primary" style="flex:1;padding:10px" onclick="setorModalSalvar()">Salvar</button>'
+    +'<button class="secondary" style="flex:1;padding:10px" onclick="setorModalFechar(true)">Depois</button></div></div>';
+  document.body.appendChild(d);
+}
+function setorModalFechar(depois){
+  var d=document.getElementById('setorModal'); if(d) d.remove();
+  if(depois){ try{ sessionStorage.setItem('hps_setor_depois','1'); }catch(e){} }
+}
+async function setorModalSalvar(){
+  var sel=(document.getElementById('smSetor')||{}).value||'';
+  var v=(sel==='__outro__' ? ((document.getElementById('smOutro')||{}).value||'') : sel).trim().replace(/\s+/g,' ').slice(0,120);
+  if(!v){ var e=document.getElementById('smErr'); if(e) e.textContent='Escolha o setor (ou "Depois").'; return; }
+  await saveProfileData({setor:v});
+  setorAplicarCabecalho();
+  setorModalFechar(false);
+}
+
+/* ---------- Painel do presidente: convites ---------- */
+function mSemAcento(t){ return String(t||'').normalize('NFD').replace(/[̀-ͯ]/g,''); }
+function conviteSugerirLogin(){
+  var n=mSemAcento((document.getElementById('cvNome')||{}).value||'').toLowerCase().replace(/[^a-z ]/g,' ').trim().split(/\s+/)
+    .filter(function(p){ return p && ['da','de','do','das','dos','e'].indexOf(p)<0; });
+  var el=document.getElementById('cvLogin'); if(!el || !n.length) return;
+  var base=(n[0]+n.slice(1).map(function(p){ return p[0]; }).join('')).slice(0,28);
+  var l=base, i=2; while((MEMBROS_DB && MEMBROS_DB[l]) || USUARIOS_RESERVA[l]){ l=base+i; i++; }
+  el.value=l;
+}
+function conviteCodigo(){
+  var a=new Uint8Array(24); crypto.getRandomValues(a);
+  return btoa(String.fromCharCode.apply(null,a)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function conviteLink(code){ return location.origin+location.pathname.replace(/[^\/]*$/,'')+'?convite='+code; }
+async function conviteCriar(){
+  var out=document.getElementById('cvResultado');
+  try{
+    if(!currentUser || currentUser.login!==OWNER_LOGIN) throw new Error('Apenas o presidente pode convidar.');
+    initFirebase(); await waitForAuth();
+    var nome=String((document.getElementById('cvNome')||{}).value||'').trim().replace(/\s+/g,' ');
+    var login=String((document.getElementById('cvLogin')||{}).value||'').trim().toLowerCase();
+    var papel=(document.getElementById('cvPapel')||{}).value||'membro';
+    if(nome.length<3 || nome.length>120) throw new Error('Informe o nome completo (3 a 120 caracteres).');
+    if(!mLoginValido(login)) throw new Error('Login inválido: 3 a 30 letras minúsculas/números, sem espaço ou acento.');
+    if((MEMBROS_DB && MEMBROS_DB[login]) || USUARIOS_RESERVA[login]) throw new Error('Esse login já existe. Escolha outro.');
+    if(!MEMBRO_PAPEIS[papel]) papel='membro';
+    var code=conviteCodigo(), agora=Date.now();
+    var pub=fbDB.ref('membros_publico').push().key;
+    var upd={};
+    upd['convites/'+code]={login:login,nome:nome,papel:papel,criadoEm:agora,expira:agora+CONVITE_DIAS*86400000};
+    upd['login_uid/'+login]='pendente';
+    upd['membros/'+login]={nome:nome,papel:papel,visivel:true,auditor:true,ativo:true,ordem:0,pub:pub,oculto:false};
+    upd['membros_publico/'+pub]={nome:nome,papel:papel,ordem:0};
+    upd['autorizados/'+login]=true;
+    await fbDB.ref().update(upd);
+    if(!MEMBROS_DB) MEMBROS_DB={};
+    MEMBROS_DB[login]=upd['membros/'+login];
+    membrosAplicar(MEMBROS_DB);
+    var link=conviteLink(code);
+    if(out) out.innerHTML='<div class="alert-box alert-ok"><span class="ic">✅</span><div><b>Convite criado para '+escapeHtml(nome)+'</b> ('+escapeHtml(login)+'). Válido por '+CONVITE_DIAS+' dias, uso único.<br>'
+      +'<input readonly value="'+escapeHtml(link)+'" style="width:100%;margin-top:6px;font-family:\'DM Mono\',monospace;font-size:11.5px;padding:6px 8px;border:1px solid var(--line);border-radius:8px" onclick="this.select()">'
+      +'<button class="secondary" style="margin-top:6px;padding:6px 12px" data-link="'+escapeHtml(link)+'" onclick="conviteCopiar(this)">📋 Copiar link</button></div></div>';
+    ['cvNome','cvLogin'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+    rosterCarregar(); convitesCarregar();
+  }catch(e){
+    if(out) out.innerHTML='<div style="color:var(--red);font-size:12px">'+escapeHtml('Erro: '+(mIsPermDenied(e)?'permissão negada (as regras novas do Firebase já foram publicadas?)':(e.message||e)))+'</div>';
+  }
+}
+function conviteCopiar(btn){
+  var t=btn.getAttribute('data-link')||'';
+  try{ navigator.clipboard.writeText(t).then(function(){ btn.textContent='✔ Copiado'; }); }catch(e){ btn.textContent='Selecione e copie acima'; }
+}
+async function convitesCarregar(){
+  var el=document.getElementById('convitesLista'); if(!el) return;
+  try{
+    initFirebase(); await waitForAuth();
+    var v=(await fbDB.ref('convites').once('value')).val()||{};
+    var agora=Date.now();
+    var lista=Object.keys(v).map(function(k){ var c=v[k]||{}; c.code=k; return c; }).sort(function(a,b){ return (b.criadoEm||0)-(a.criadoEm||0); });
+    if(!lista.length){ el.innerHTML='Nenhum convite criado ainda.'; return; }
+    var h='<div class="tablewrap"><table><thead><tr><th>Nome</th><th>Login</th><th>Situação</th><th></th></tr></thead><tbody>';
+    lista.slice(0,20).forEach(function(c){
+      var sit, acoes='';
+      if(c.usadoPor) sit='✔ Usado'+(c.emailGoogle?' por '+escapeHtml(c.emailGoogle):'')+(c.usadoEm?' em '+new Date(c.usadoEm).toLocaleDateString('pt-BR'):'');
+      else if(c.cancelado) sit='✖ Cancelado';
+      else if(Number(c.expira)<agora) sit='⌛ Vencido em '+new Date(c.expira).toLocaleDateString('pt-BR');
+      else {
+        sit='⏳ Aguardando (vence '+new Date(c.expira).toLocaleDateString('pt-BR')+')';
+        acoes='<button class="secondary" style="padding:5px 10px" data-link="'+escapeHtml(conviteLink(c.code))+'" onclick="conviteCopiar(this)">📋 Link</button> '
+          +'<button class="secondary" style="padding:5px 10px;color:var(--red)" data-code="'+escapeHtml(c.code)+'" onclick="conviteCancelar(this.dataset.code)">Cancelar</button>';
+      }
+      h+='<tr><td>'+escapeHtml(c.nome||'')+'</td><td style="font-family:\'DM Mono\',monospace">'+escapeHtml(c.login||'')+'</td><td>'+sit+'</td><td style="white-space:nowrap">'+acoes+'</td></tr>';
+    });
+    h+='</tbody></table></div>';
+    el.innerHTML=h;
+  }catch(e){ el.innerHTML='<span style="color:var(--red)">'+escapeHtml(mIsPermDenied(e)?'Sem permissão para ler convites (as regras novas do Firebase já foram publicadas?)':'Não foi possível carregar os convites.')+'</span>'; }
+}
+async function conviteCancelar(code){
+  if(!/^[A-Za-z0-9_-]{24,64}$/.test(String(code||''))) return;
+  if(!confirm('Cancelar este convite? O link deixa de funcionar e o cadastro reservado fica desativado.')) return;
+  try{
+    var c=(await fbDB.ref('convites/'+code).once('value')).val();
+    if(!c || c.usadoPor) { convitesCarregar(); return; }
+    var m=(MEMBROS_DB&&MEMBROS_DB[c.login])||{};
+    var upd={};
+    upd['convites/'+code+'/cancelado']=true;
+    upd['autorizados/'+c.login]=null;
+    if(m.nome){ upd['membros/'+c.login+'/ativo']=false; if(m.pub) upd['membros_publico/'+m.pub]=null; }
+    await fbDB.ref().update(upd);
+    if(MEMBROS_DB && MEMBROS_DB[c.login]) MEMBROS_DB[c.login].ativo=false;
+    membrosAplicar(MEMBROS_DB); rosterCarregar(); membrosAdminRender();
+  }catch(e){ mMsg('Erro ao cancelar: '+(e.message||e),false); }
+}
+try{ conviteDaUrl(); }catch(e){}
+document.addEventListener('DOMContentLoaded',function(){ try{ conviteAvisoRender(); }catch(e){} });
+window.addEventListener('load',function(){
+  try{
+    conviteAvisoRender();
+    var c=sessionStorage.getItem(CONVITE_KEY)||'';
+    if(c && !currentUser){ var t=document.getElementById('tab-coleta'); if(t) requestColeta(t); }
+  }catch(e){}
+});
 
 /* === VISIBILIDADE DE ABAS PARA AUDITORES (2026-10-12) =========================
    Firebase: config_plataforma/resultados_auditores (bool). Leitura: autorizados; escrita: só owner.
@@ -2072,6 +2397,7 @@ async function afterLogin(){
   listenOnline();
   listenChat();
   try{ renderRegimento(); }catch(e){}
+  try{ setorPedirSeVazio(); }catch(e){}
 }
 
 function logout(){
@@ -2164,6 +2490,7 @@ async function saveProfileData(obj){
 }
 
 function buildProfilePage(){
+  setTimeout(function(){ try{ googleBoxRender(); }catch(e){} },0);
   const name=currentUser.name;
   const initials=name.split(' ').map(p=>p[0]).join('').slice(0,2).toUpperCase();
   const avatarKey='avatar_'+currentUser.login;
@@ -2237,6 +2564,8 @@ function buildProfilePage(){
       </div>
     </div>
   </div>
+
+  <div id="googleVinculoBox" style="margin:0 0 16px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card);font-size:13px"></div>
 
   <!-- Abas internas do perfil -->
   <div class="profile-tab-bar">
@@ -2437,6 +2766,7 @@ async function loadMembros(){
       +(pd.cargo?'<div class="member-spec">'+escapeHtml(pd.cargo)+'</div>':'')
       +(pd.especialidade?'<div class="member-spec">'+escapeHtml(pd.especialidade)+'</div>':'')
       +(isMe?'<div class="member-me-badge">● Você</div>':'')
+      +(m.oculto?'<div class="member-spec" style="color:var(--red)">🙈 perfil oculto</div>':'')
       +'</div>';
   });
 
@@ -2712,7 +3042,7 @@ function listenOnline(){
 function renderOnlineList(){
   const el = document.getElementById('chatOnlineList');
   if(!el) return;
-  const others = Object.values(_onlineUsers).filter(u => u.login !== currentUser.login);
+  const others = Object.values(_onlineUsers).filter(u => u.login !== currentUser.login && !membroOculto(u.login));
   if(!others.length){
     el.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:4px 8px">Ninguém mais online</div>';
     return;
@@ -2813,7 +3143,7 @@ function openAddParticipant(){
   const modal = document.getElementById('addParticipantModal');
   const list = document.getElementById('addParticipantList');
   if(!modal || !list) return;
-  const allMembers = Object.entries(USUARIOS).filter(([k])=>k!==currentUser.login&&!_currentConvParticipants.includes(k));
+  const allMembers = Object.entries(USUARIOS).filter(([k])=>k!==currentUser.login&&!_currentConvParticipants.includes(k)&&!membroOculto(k));
   list.innerHTML = allMembers.map(([login, name])=>
     '<label style="display:flex;align-items:center;gap:10px;padding:7px 4px;cursor:pointer">'
     + '<input type="checkbox" value="'+escapeHtml(login)+'" style="width:16px;height:16px;cursor:pointer">'
