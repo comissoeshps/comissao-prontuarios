@@ -1359,7 +1359,7 @@ function membrosAplicar(db){
   if(!logins.length) return; // nó vazio: mantém a reserva
   var novos={}, auds=[];
   logins.forEach(function(login){
-    var m=MEMBROS_DB[login]; if(!m || m.ativo===false || !m.nome) return;
+    var m=MEMBROS_DB[login]; if(!m || m.ativo===false || m.removido===true || !m.nome) return;
     novos[login]=m.nome;
     if(m.auditor!==false && m.oculto!==true) auds.push(m.nome);
   });
@@ -1510,7 +1510,8 @@ function membrosAdminRender(){
     h+='<div class="alert-box alert-partial" style="margin-bottom:12px"><span class="ic">&#9888;&#65039;</span><div>A lista de membros ainda não está no Firebase. O site está usando a lista fixa do código.<br>'
       +'<button class="primary" style="margin-top:8px;padding:8px 14px" onclick="membrosImportar()">Importar lista atual ('+Object.keys(USUARIOS_RESERVA).length+' membros)</button></div></div>';
   } else {
-    var lista=logins.map(function(l){ var m=db[l]||{}; return {login:l,nome:m.nome||'',papel:m.papel||'membro',visivel:m.visivel!==false,auditor:m.auditor!==false,ativo:m.ativo!==false,oculto:m.oculto===true}; }).sort(mCmpPapel);
+    var removidos=logins.filter(function(l){ return db[l] && db[l].removido===true; });
+    var lista=logins.filter(function(l){ return !(db[l] && db[l].removido===true); }).map(function(l){ var m=db[l]||{}; return {login:l,nome:m.nome||'',papel:m.papel||'membro',visivel:m.visivel!==false,auditor:m.auditor!==false,ativo:m.ativo!==false,oculto:m.oculto===true}; }).sort(mCmpPapel);
     h+='<div class="tablewrap"><table><thead><tr><th>Nome</th><th>Login</th><th>Papel</th><th title="Aparece na Página Inicial">Pág. inicial</th><th>Auditor</th><th title="Esconde o perfil na grade de Membros, no chat, na lista de auditores e na Página Inicial">Perfil oculto</th><th>Acesso ativo</th><th></th></tr></thead><tbody>';
     lista.forEach(function(m,i){
       var dono=m.login===OWNER_LOGIN;
@@ -1522,10 +1523,18 @@ function membrosAdminRender(){
         +'<td style="text-align:center">'+mChk('mAud_'+i,m.auditor)+'</td>'
         +'<td style="text-align:center">'+mChk('mOcu_'+i,m.oculto,dono)+'</td>'
         +'<td style="text-align:center">'+mChk('mAtv_'+i,m.ativo,dono)+'</td>'
-        +'<td><button class="secondary" style="padding:6px 12px" onclick="membrosSalvarLinha('+i+',\''+m.login+'\')">Salvar</button></td>'
+        +'<td style="white-space:nowrap"><button class="secondary" style="padding:6px 12px" onclick="membrosSalvarLinha('+i+',\''+m.login+'\')">Salvar</button>'
+        +(dono?'':' <button class="secondary" title="Remover membro" style="padding:6px 10px;color:var(--red)" data-login="'+mEsc(m.login)+'" onclick="membroRemover(this.dataset.login)">🗑️</button>')+'</td>'
         +'</tr>';
     });
     h+='</tbody></table></div>';
+    if(removidos.length){
+      h+='<details style="margin-top:10px"><summary style="cursor:pointer;font-size:12.5px;font-weight:700;color:var(--muted)">Removidos ('+removidos.length+')</summary>'
+        +'<div style="font-size:11.5px;color:var(--muted);margin:6px 0">Sem acesso e fora de todas as listas. As auditorias feitas por eles continuam na planilha.</div>'
+        +removidos.sort().map(function(l){ return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-top:1px dashed var(--line)"><span>'+mEsc(db[l].nome||l)+' <span style="font-family:\'DM Mono\',monospace;font-size:11.5px;color:var(--muted)">('+mEsc(l)+')</span></span>'
+          +'<button class="secondary" style="padding:5px 10px" data-login="'+mEsc(l)+'" onclick="membroRestaurar(this.dataset.login)">Restaurar</button></div>'; }).join('')
+        +'</details>';
+    }
   }
   var faltam=Object.keys(USUARIOS_RESERVA).filter(function(l){ return !db[l]; });
   if(logins.length && faltam.length){
@@ -1626,6 +1635,48 @@ async function membrosImportar(){
 }
 
 
+
+
+/* === REMOVER / RESTAURAR MEMBRO (2026-10-13) =====================================
+   Remoção "lógica": membros/<login> fica com removido:true (ativo/visivel/auditor false, oculto true),
+   sai de autorizados e da Página Inicial. Bloqueia login, Firebase e Apps Script na hora.
+   Não apaga: auditorias da planilha (histórico), perfil, vínculo Google (só volta a valer se restaurar)
+   e o login fica reservado (não é reaproveitado por outra pessoa por engano).
+   A conta de login (Authentication) só o Console apaga — o painel mostra qual. */
+async function membroAuthEmail(login){
+  try{
+    var cv=(await fbDB.ref('convites').once('value')).val()||{};
+    for(var k in cv){ if(cv[k] && cv[k].login===login && cv[k].emailGoogle) return cv[k].emailGoogle+' (conta Google, entrou por convite)'; }
+  }catch(e){}
+  return login+'@'+AUTH_EMAIL_DOMAIN;
+}
+async function membroRemover(login){
+  try{
+    if(!currentUser || currentUser.login!==OWNER_LOGIN) throw new Error('Apenas o presidente pode remover membros.');
+    if(login===OWNER_LOGIN) throw new Error('Não é possível remover o presidente.');
+    var m=(MEMBROS_DB&&MEMBROS_DB[login]); if(!m) throw new Error('Membro não encontrado.');
+    if(!confirm('Remover '+(m.nome||login)+' da Comissão?\n\n• Perde o acesso na hora (site, banco e planilha).\n• Some da Página Inicial, dos auditores, dos Membros e do chat.\n• As auditorias que fez continuam na planilha.\n• Dá para restaurar depois em "Removidos".')) return;
+    initFirebase(); await waitForAuth();
+    var novo={nome:m.nome,papel:MEMBRO_PAPEIS[m.papel]?m.papel:'membro',visivel:false,auditor:false,ativo:false,ordem:typeof m.ordem==='number'?m.ordem:0,pub:m.pub||fbDB.ref('membros_publico').push().key,oculto:true,removido:true};
+    var upd={};
+    upd['membros/'+login]=novo;
+    upd['membros_publico/'+novo.pub]=null;
+    upd['autorizados/'+login]=null;
+    await fbDB.ref().update(upd);
+    MEMBROS_DB[login]=novo;
+    var conta=await membroAuthEmail(login);
+    await membrosAposGravar('✔ '+(m.nome||login)+' removido(a). Para apagar também a conta de login: Firebase → Authentication → Usuários → '+conta+' → ⋮ → Excluir conta.');
+  }catch(e){ mMsg('Erro ao remover: '+(mIsPermDenied(e)?'permissão negada (as regras novas do Firebase já foram publicadas?)':(e.message||e)),false); }
+}
+async function membroRestaurar(login){
+  try{
+    var m=(MEMBROS_DB&&MEMBROS_DB[login]); if(!m) return;
+    if(!confirm('Restaurar '+(m.nome||login)+'? O acesso volta a valer (se a conta de login ainda existir).')) return;
+    initFirebase(); await waitForAuth();
+    await membroGravar(login,{nome:m.nome,papel:m.papel,visivel:true,auditor:true,ativo:true,oculto:false});
+    await membrosAposGravar('✔ '+(m.nome||login)+' restaurado(a).');
+  }catch(e){ mMsg('Erro ao restaurar: '+(mIsPermDenied(e)?'permissão negada':(e.message||e)),false); }
+}
 
 /* === LOGIN COM GOOGLE + CONVITES (2026-10-13) ===================================
    • Conta clássica (login@comissaohps.local) pode VINCULAR o Google no perfil → mesma conta, mesmo uid.
