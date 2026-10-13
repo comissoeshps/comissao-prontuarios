@@ -680,6 +680,20 @@ tr:hover td{background:#FAFCFF}
       </div>
     </div>
 
+    <!-- TELA: conta Google não reconhecida → vincular à conta existente com usuário e senha -->
+    <div id="vincularScreen" style="display:none">
+      <div style="background:#EAF2FF;border-radius:10px;padding:12px 14px;font-size:12.5px;color:var(--blue);margin-bottom:16px;line-height:1.55">
+        Não encontramos a conta Google <b id="vincGmail"></b> na plataforma.<br>
+        <b>Já é auditor(a) e tem usuário e senha?</b> Digite-os <b>uma única vez</b> para ligar este Google à sua conta. Depois disso, é só usar "Entrar com Google".
+      </div>
+      <div class="login-field"><label>Usuário</label><input id="vincUser" type="text" autocomplete="username" placeholder="Ex.: joaods" onkeydown="if(event.key==='Enter')vincularGoogleComSenha()"></div>
+      <div class="login-field"><label>Senha atual</label><div class="pw-wrap"><input id="vincPass" type="password" autocomplete="current-password" placeholder="••••••••" onkeydown="if(event.key==='Enter')vincularGoogleComSenha()"></div></div>
+      <button class="login-btn" id="btnVincular" onclick="vincularGoogleComSenha()">Vincular e entrar</button>
+      <div id="vincErr" class="login-error"></div>
+      <div style="font-size:11.5px;color:var(--muted);margin-top:12px;line-height:1.5;text-align:center">É novo(a) na Comissão? Peça um <b>convite</b> à presidência.<br>
+        <button type="button" onclick="vincularCancelar()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;font-family:'DM Sans',sans-serif;text-decoration:underline;margin-top:6px">← Voltar ao login</button></div>
+    </div>
+
     <div id="loginScreen">
       <div id="conviteAviso" style="display:none;background:#EAF7EE;border:1px solid #BFE3C8;border-radius:10px;padding:12px 14px;font-size:12.5px;color:#17633A;margin-bottom:14px;line-height:1.5">
         🎟️ <b>Você recebeu um convite</b> para a Comissão de Revisão de Prontuários. Clique em <b>Entrar com Google</b> abaixo e escolha a sua conta Google.
@@ -1343,6 +1357,8 @@ let MEMBROS_DB=null;          // {login:{...}} depois de carregado; {} = nó vaz
 let _membrosCarregando=null;  // evita leituras simultâneas
 let _membrosAdminAberto=false;
 function mEsc(v){ return String(v==null?'':v).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function loginExcluido(l){ try{ return !!(CFG_PLAT && CFG_PLAT.excluidos && CFG_PLAT.excluidos[l]===true); }catch(e){ return false; } }
+function loginOcupado(l){ return !!((MEMBROS_DB && MEMBROS_DB[l]) || (USUARIOS_RESERVA[l] && !loginExcluido(l))); }
 function mLoginValido(l){ return /^[a-z0-9]{3,30}$/.test(String(l||'')); }
 function mCmpNome(a,b){ return String(a.nome).localeCompare(String(b.nome),'pt-BR'); }
 function mCmpPapel(a,b){
@@ -1365,7 +1381,7 @@ function membrosAplicar(db){
   });
   // lista parcial: quem está na reserva e AINDA NÃO está no Firebase continua valendo
   Object.keys(USUARIOS_RESERVA).forEach(function(l){
-    if(MEMBROS_DB[l]) return;
+    if(MEMBROS_DB[l] || loginExcluido(l)) return;
     novos[l]=USUARIOS_RESERVA[l];
     if(auds.indexOf(USUARIOS_RESERVA[l])<0) auds.push(USUARIOS_RESERVA[l]);
   });
@@ -1384,7 +1400,7 @@ function membrosParaGrade(){
   if(MEMBROS_DB && Object.keys(MEMBROS_DB).length){
     var _dono=!!(currentUser && currentUser.login===OWNER_LOGIN);
     Object.keys(MEMBROS_DB).forEach(function(l){ var m=MEMBROS_DB[l]; if(m && m.ativo!==false && m.nome && (m.oculto!==true || _dono)) lista.push({login:l,nome:m.nome,oculto:m.oculto===true}); });
-    Object.keys(USUARIOS_RESERVA).forEach(function(l){ if(!MEMBROS_DB[l]) lista.push({login:l,nome:USUARIOS_RESERVA[l]}); });
+    Object.keys(USUARIOS_RESERVA).forEach(function(l){ if(!MEMBROS_DB[l] && !loginExcluido(l)) lista.push({login:l,nome:USUARIOS_RESERVA[l]}); });
   } else {
     Object.keys(USUARIOS_RESERVA).forEach(function(l){ lista.push({login:l,nome:USUARIOS_RESERVA[l]}); });
   }
@@ -1532,11 +1548,12 @@ function membrosAdminRender(){
       h+='<details style="margin-top:10px"><summary style="cursor:pointer;font-size:12.5px;font-weight:700;color:var(--muted)">Removidos ('+removidos.length+')</summary>'
         +'<div style="font-size:11.5px;color:var(--muted);margin:6px 0">Sem acesso e fora de todas as listas. As auditorias feitas por eles continuam na planilha.</div>'
         +removidos.sort().map(function(l){ return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-top:1px dashed var(--line)"><span>'+mEsc(db[l].nome||l)+' <span style="font-family:\'DM Mono\',monospace;font-size:11.5px;color:var(--muted)">('+mEsc(l)+')</span></span>'
-          +'<button class="secondary" style="padding:5px 10px" data-login="'+mEsc(l)+'" onclick="membroRestaurar(this.dataset.login)">Restaurar</button></div>'; }).join('')
+          +'<span style="white-space:nowrap"><button class="secondary" style="padding:5px 10px" data-login="'+mEsc(l)+'" onclick="membroRestaurar(this.dataset.login)">Restaurar</button> '
+          +'<button class="secondary" style="padding:5px 10px;color:var(--red)" data-login="'+mEsc(l)+'" onclick="membroExcluirDefinitivo(this.dataset.login)">Excluir definitivamente</button></span></div>'; }).join('')
         +'</details>';
     }
   }
-  var faltam=Object.keys(USUARIOS_RESERVA).filter(function(l){ return !db[l]; });
+  var faltam=Object.keys(USUARIOS_RESERVA).filter(function(l){ return !db[l] && !loginExcluido(l); });
   if(logins.length && faltam.length){
     h+='<div class="alert-box alert-partial" style="margin-top:12px"><span class="ic">&#9888;&#65039;</span><div><b>A lista do Firebase está incompleta:</b> faltam '+faltam.length+' membro(s) da lista fixa ('+mEsc(faltam.join(', '))+').<br>'
       +'<button class="primary" style="margin-top:8px;padding:8px 14px" onclick="membrosImportar()">Completar lista (importar os '+faltam.length+' que faltam)</button></div></div>';
@@ -1613,7 +1630,8 @@ async function membrosAdicionar(){
     initFirebase(); await waitForAuth();
     var login=String(document.getElementById('mNovoLogin').value||'').trim().toLowerCase();
     if(!MEMBROS_DB || !Object.keys(MEMBROS_DB).length) throw new Error('Importe a lista atual antes de adicionar alguém.');
-    if(MEMBROS_DB && MEMBROS_DB[login]) throw new Error('Esse login já existe na lista. Edite a linha dele acima.');
+    if(MEMBROS_DB && MEMBROS_DB[login]) throw new Error(MEMBROS_DB[login].removido===true?'Esse login está em "Removidos". Restaure ou use "Excluir definitivamente" para liberá-lo.':'Esse login já existe na lista. Edite a linha dele acima.');
+    if(loginExcluido(login)){ try{ await fbDB.ref('config_plataforma/excluidos/'+login).remove(); CFG_PLAT.excluidos[login]=false; }catch(e){} }
     await membroGravar(login,{nome:document.getElementById('mNovoNome').value,papel:document.getElementById('mNovoPapel').value,
       visivel:document.getElementById('mNovoVis').checked,auditor:document.getElementById('mNovoAud').checked,ativo:true});
     await membrosAposGravar('✔ '+login+' adicionado. Se ainda não criou, falta só a conta no Firebase Authentication.');
@@ -1623,7 +1641,7 @@ async function membrosImportar(){
   try{
     initFirebase(); await waitForAuth();
     var snapAt=await fbDB.ref('membros').once('value'); MEMBROS_DB=snapAt.val()||{};
-    var logins=Object.keys(USUARIOS_RESERVA).filter(function(l){ return !MEMBROS_DB[l]; }); // só quem falta
+    var logins=Object.keys(USUARIOS_RESERVA).filter(function(l){ return !MEMBROS_DB[l] && !loginExcluido(l); }); // só quem falta
     if(!logins.length){ await membrosAposGravar('✔ Lista já completa.'); return; }
     if(!confirm('Importar '+logins.length+' membro(s) da lista fixa para o Firebase?\n'+logins.join(', '))) return;
     for(var i=0;i<logins.length;i++){
@@ -1662,12 +1680,58 @@ async function membroRemover(login){
     upd['membros/'+login]=novo;
     upd['membros_publico/'+novo.pub]=null;
     upd['autorizados/'+login]=null;
+    // convites pendentes deste login também são cancelados (o link para de funcionar)
+    try{
+      var cvs=(await fbDB.ref('convites').once('value')).val()||{};
+      Object.keys(cvs).forEach(function(k){ var c=cvs[k]||{}; if(c.login===login && !c.usadoPor && c.cancelado!==true) upd['convites/'+k+'/cancelado']=true; });
+    }catch(e){}
     await fbDB.ref().update(upd);
     MEMBROS_DB[login]=novo;
     var conta=await membroAuthEmail(login);
     await membrosAposGravar('✔ '+(m.nome||login)+' removido(a). Para apagar também a conta de login: Firebase → Authentication → Usuários → '+conta+' → ⋮ → Excluir conta.');
   }catch(e){ mMsg('Erro ao remover: '+(mIsPermDenied(e)?'permissão negada (as regras novas do Firebase já foram publicadas?)':(e.message||e)),false); }
 }
+
+/* Exclusão DEFINITIVA (só para quem já está em "Removidos"): apaga do banco tudo que é do login
+   e o libera para reuso. Auditorias na planilha permanecem (histórico). A conta do Authentication
+   continua sendo apagada no Console (o site não tem permissão para isso). */
+async function membroExcluirDefinitivo(login){
+  try{
+    if(!currentUser || currentUser.login!==OWNER_LOGIN) throw new Error('Apenas o presidente pode excluir.');
+    if(login===OWNER_LOGIN || !mLoginValido(login)) return;
+    var m=(MEMBROS_DB&&MEMBROS_DB[login]);
+    if(!m || m.removido!==true) throw new Error('Remova o membro (🗑️) antes de excluir definitivamente.');
+    var conta=await membroAuthEmail(login);
+    var digitado=prompt('EXCLUSÃO DEFINITIVA de '+(m.nome||login)+'\n\nApaga cadastro, perfil, foto, vínculo Google e convites deste login, e libera o login para reuso. NÃO tem como desfazer.\nAs auditorias já feitas continuam na planilha.\n\nPara confirmar, digite o login: '+login);
+    if(digitado===null) return;
+    if(String(digitado).trim().toLowerCase()!==login){ mMsg('Exclusão cancelada: o login digitado não confere.',false); return; }
+    initFirebase(); await waitForAuth();
+    var upd={};
+    upd['membros/'+login]=null;
+    if(m.pub) upd['membros_publico/'+m.pub]=null;
+    upd['autorizados/'+login]=null;
+    upd['perfis/'+login]=null;
+    upd['online/'+login]=null;
+    upd['auth/'+login]=null;
+    upd['conv_meta/'+login]=null;
+    var uids={};
+    try{ var lu=(await fbDB.ref('login_uid/'+login).once('value')).val(); if(lu && lu!=='pendente') uids[lu]=1; }catch(e){}
+    try{
+      var cvs=(await fbDB.ref('convites').once('value')).val()||{};
+      Object.keys(cvs).forEach(function(k){ var c=cvs[k]||{}; if(c.login===login){ upd['convites/'+k]=null; if(c.usadoPor) uids[c.usadoPor]=1; } });
+    }catch(e){}
+    Object.keys(uids).forEach(function(u){ if(/^[A-Za-z0-9]{10,128}$/.test(u)) upd['uid_login/'+u]=null; });
+    upd['login_uid/'+login]=null;
+    if(USUARIOS_RESERVA[login]) upd['config_plataforma/excluidos/'+login]=true;   // não volta pela lista fixa do código
+    await fbDB.ref().update(upd);
+    delete MEMBROS_DB[login];
+    if(USUARIOS_RESERVA[login]){ CFG_PLAT.excluidos=CFG_PLAT.excluidos||{}; CFG_PLAT.excluidos[login]=true; }
+    try{ localStorage.removeItem('profile_'+login); localStorage.removeItem('avatar_'+login); }catch(e){}
+    await membrosAposGravar('✔ '+(m.nome||login)+' excluído(a) definitivamente; o login "'+login+'" está livre. Falta apagar a conta de login: Firebase → Authentication → Usuários → '+conta+' → ⋮ → Excluir conta.');
+    convitesCarregar();
+  }catch(e){ mMsg('Erro ao excluir: '+(mIsPermDenied(e)?'permissão negada (as regras novas do Firebase já foram publicadas?)':(e.message||e)),false); }
+}
+
 async function membroRestaurar(login){
   try{
     var m=(MEMBROS_DB&&MEMBROS_DB[login]); if(!m) return;
@@ -1815,7 +1879,13 @@ async function entrarComGoogle(origem){
         }
       }
       if(!login){
-        try{ if(nova) await u.delete(); else await fbAuth.signOut(); }catch(_){ try{ await fbAuth.signOut(); }catch(__){} }
+        // Conta Google sem cadastro: guarda a credencial e apaga a conta solta (precisa ser apagada
+        // para que este Google possa ser ligado à conta original). O vínculo exige usuário + SENHA.
+        _googleCredPendente = cred.credential || null;
+        _googleEmailPendente = u.email || '';
+        var apagou=false;
+        try{ await u.delete(); apagou=true; }catch(_){ try{ await fbAuth.signOut(); }catch(__){} }
+        if(!modoConvite && _googleCredPendente){ vincularMostrar(apagou); return; }
         if(err) err.innerHTML=MSG_SEM_CADASTRO;
         return;
       }
@@ -1836,6 +1906,67 @@ async function entrarComGoogle(origem){
     completeLogin(login);
   } finally {
     if(btn){ btn.disabled=false; btn.style.opacity=''; }
+  }
+}
+
+
+/* ---------- Vincular Google a uma conta existente pela tela de login (exige a SENHA atual) ----------
+   O nome completo NÃO serve como prova: é público (Página Inicial). Só usuário + senha comprovam a posse da conta. */
+var _googleCredPendente=null, _googleEmailPendente='', _vincApagou=true;
+function vincularMostrar(apagou){
+  _vincApagou=!!apagou;
+  ['loginScreen','conviteScreen','firstAccessScreen','forgotScreen','resetScreen'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display='none'; });
+  var vs=document.getElementById('vincularScreen'); if(vs) vs.style.display='block';
+  var g=document.getElementById('vincGmail'); if(g) g.textContent=_googleEmailPendente||'';
+  var t=document.getElementById('loginPanelTitle'); if(t) t.textContent='Vincular conta Google';
+  var st=document.getElementById('loginPanelSub'); if(st) st.textContent='Confirme que a conta é sua';
+  var e=document.getElementById('vincErr'); if(e) e.textContent = apagou ? '' : 'Atenção: não foi possível liberar esta conta Google automaticamente. Se o vínculo falhar, avise a presidência.';
+  setTimeout(function(){ var i=document.getElementById('vincUser'); if(i) i.focus(); },100);
+}
+function vincularCancelar(){
+  _googleCredPendente=null; _googleEmailPendente='';
+  var vs=document.getElementById('vincularScreen'); if(vs) vs.style.display='none';
+  ['vincUser','vincPass'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+  showLoginScreen();
+}
+async function vincularGoogleComSenha(){
+  var err=document.getElementById('vincErr'), btn=document.getElementById('btnVincular');
+  if(err) err.textContent='';
+  var user=String((document.getElementById('vincUser')||{}).value||'').trim().toLowerCase();
+  var pass=String((document.getElementById('vincPass')||{}).value||'');
+  var bloq=checkLoginBlocked(); if(bloq){ if(err) err.textContent=bloq; return; }
+  if(!_googleCredPendente){ if(err) err.textContent='A confirmação do Google expirou. Volte e clique em "Entrar com Google" de novo.'; return; }
+  if(!mLoginValido(user) || !pass){ registerFailedAttempt(); if(err) err.textContent='Usuário ou senha incorretos.'; return; }
+  if(btn){ btn.disabled=true; btn.textContent='Verificando…'; }
+  try{
+    initFirebase();
+    try{ await fbAuth.signInWithEmailAndPassword(authEmail(user), pass); }
+    catch(e){ registerFailedAttempt(); if(err) err.textContent='Usuário ou senha incorretos.'; return; }
+    var acesso=await membroVerificarAcesso(user);
+    if(!acesso.ok){ try{ await fbAuth.signOut(); }catch(e){} registerFailedAttempt(); if(err) err.textContent='Seu acesso à plataforma não está ativo. Procure a presidência da Comissão.'; return; }
+    try{
+      await fbAuth.currentUser.linkWithCredential(_googleCredPendente);
+    }catch(e){
+      var c=(e&&e.code)||'';
+      var m = (c==='auth/credential-already-in-use'||c==='auth/email-already-in-use')
+        ? 'Este Google ainda está preso a outra conta na plataforma. Peça à presidência para excluí-la em Firebase → Authentication ('+(_googleEmailPendente||'')+') e tente de novo.'
+        : (c==='auth/provider-already-linked') ? 'Sua conta já tem outro Google vinculado. Para trocar, desvincule em "Ver meu perfil".'
+        : (c==='auth/invalid-credential' || c==='auth/user-token-expired') ? 'A confirmação do Google expirou. Volte e clique em "Entrar com Google" de novo.'
+        : 'Não foi possível vincular ('+(c||'erro')+').';
+      try{ await fbAuth.signOut(); }catch(_){}
+      if(err) err.textContent=m;
+      return;
+    }
+    _googleCredPendente=null;
+    USUARIOS[user]=acesso.nome;
+    clearLoginAttempts();
+    var vs=document.getElementById('vincularScreen'); if(vs) vs.style.display='none';
+    ['vincUser','vincPass'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+    if(await needsPasswordChange(user)){ _pwChangeUser=user; showChangePasswordScreen(true); return; }
+    completeLogin(user);
+    setTimeout(function(){ try{ alert('✔ Conta Google '+(_googleEmailPendente||'')+' vinculada. Da próxima vez, use "Entrar com Google".'); }catch(e){} }, 300);
+  } finally {
+    if(btn){ btn.disabled=false; btn.textContent='Vincular e entrar'; }
   }
 }
 
@@ -1924,7 +2055,7 @@ function conviteSugerirLogin(){
     .filter(function(p){ return p && ['da','de','do','das','dos','e'].indexOf(p)<0; });
   var el=document.getElementById('cvLogin'); if(!el || !n.length) return;
   var base=(n[0]+n.slice(1).map(function(p){ return p[0]; }).join('')).slice(0,28);
-  var l=base, i=2; while((MEMBROS_DB && MEMBROS_DB[l]) || USUARIOS_RESERVA[l]){ l=base+i; i++; }
+  var l=base, i=2; while(loginOcupado(l)){ l=base+i; i++; }
   el.value=l;
 }
 function conviteCodigo(){
@@ -1942,7 +2073,7 @@ async function conviteCriar(){
     var papel=(document.getElementById('cvPapel')||{}).value||'membro';
     if(nome.length<3 || nome.length>120) throw new Error('Informe o nome completo (3 a 120 caracteres).');
     if(!mLoginValido(login)) throw new Error('Login inválido: 3 a 30 letras minúsculas/números, sem espaço ou acento.');
-    if((MEMBROS_DB && MEMBROS_DB[login]) || USUARIOS_RESERVA[login]) throw new Error('Esse login já existe. Escolha outro.');
+    if(loginOcupado(login)) throw new Error('Esse login já existe (ou está em "Removidos" — use "Excluir definitivamente" para liberá-lo).');
     if(!MEMBRO_PAPEIS[papel]) papel='membro';
     var code=conviteCodigo(), agora=Date.now();
     var pub=fbDB.ref('membros_publico').push().key;
@@ -1952,6 +2083,7 @@ async function conviteCriar(){
     upd['membros/'+login]={nome:nome,papel:papel,visivel:true,auditor:true,ativo:true,ordem:0,pub:pub,oculto:false};
     upd['membros_publico/'+pub]={nome:nome,papel:papel,ordem:0};
     upd['autorizados/'+login]=true;
+    if(loginExcluido(login)) upd['config_plataforma/excluidos/'+login]=null;
     await fbDB.ref().update(upd);
     if(!MEMBROS_DB) MEMBROS_DB={};
     MEMBROS_DB[login]=upd['membros/'+login];
@@ -2025,7 +2157,7 @@ window.addEventListener('load',function(){
    Firebase: config_plataforma/resultados_auditores (bool). Leitura: autorizados; escrita: só owner.
    Ausente ou ilegível = visível (comportamento anterior). É controle de INTERFACE,
    não de acesso a dados (a base continua acessível pelo Apps Script a qualquer autorizado). */
-var CFG_PLAT={resultados_auditores:true};
+var CFG_PLAT={resultados_auditores:true, excluidos:{}};
 var _cfgPlatRef=null;
 function podeVerResultados(){
   if(!currentUser) return false;
@@ -2050,6 +2182,7 @@ function cfgPlatCarregar(){
     _cfgPlatRef.on('value', function(snap){
       var v=snap.val()||{};
       CFG_PLAT.resultados_auditores = (v.resultados_auditores!==false);
+      CFG_PLAT.excluidos = (v.excluidos && typeof v.excluidos==='object') ? v.excluidos : {};
       abasAplicar();
       if(_membrosAdminAberto) membrosAdminRender();
     }, function(err){ console.warn('[config_plataforma] usando padrão (visível):', err && err.message); });
@@ -2057,7 +2190,7 @@ function cfgPlatCarregar(){
 }
 function cfgPlatDesligar(){
   if(_cfgPlatRef){ try{ _cfgPlatRef.off(); }catch(e){} _cfgPlatRef=null; }
-  CFG_PLAT={resultados_auditores:true};
+  CFG_PLAT={resultados_auditores:true, excluidos:{}};
 }
 async function cfgPlatSalvar(){
   try{
@@ -2194,7 +2327,7 @@ let _resetTargetLogin = null;// login do usuário que pediu reset
 /* Navegação entre telas */
 function showLoginScreen(){
   hideAllPw();
-  ['firstAccessScreen','forgotScreen','resetScreen'].forEach(id=>{
+  ['firstAccessScreen','forgotScreen','resetScreen','vincularScreen'].forEach(id=>{
     const el=document.getElementById(id);
     if(el) el.style.display='none';
   });
