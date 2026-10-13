@@ -660,6 +660,26 @@ tr:hover td{background:#FAFCFF}
     </div>
 
     <!-- TELA 1: Login normal -->
+    <!-- TELA DE CONVITE: aberta pelo link ?convite=… (sem usuário/senha) -->
+    <div id="conviteScreen" style="display:none">
+      <div style="background:#EAF7EE;border:1px solid #BFE3C8;border-radius:10px;padding:12px 14px;font-size:12.5px;color:#17633A;margin-bottom:16px;line-height:1.5">
+        🎟️ <b>Bem-vindo(a)!</b> Você foi convidado(a) para a Comissão de Revisão de Prontuários. Preencha seus dados e confirme com a sua conta Google.
+      </div>
+      <div class="login-field"><label>Nome completo</label><input id="cvtNome" type="text" maxlength="120" autocomplete="off" placeholder="Como está no convite (ex.: Maria Souza Lima)"></div>
+      <div class="login-field"><label>Setor do hospital em que trabalha</label>
+        <select id="cvtSetor" onchange="document.getElementById('cvtSetorOutro').style.display=this.value==='__outro__'?'block':'none'" style="width:100%;border:1.5px solid var(--line);border-radius:10px;padding:11px 12px;font-family:inherit;font-size:14px;background:var(--card);color:var(--ink)"></select>
+        <input id="cvtSetorOutro" type="text" maxlength="120" placeholder="Escreva o nome do setor" style="display:none;margin-top:8px">
+      </div>
+      <button type="button" id="btnGoogleConvite" onclick="entrarComGoogle('convite')" style="width:100%;display:flex;align-items:center;justify-content:center;gap:10px;border:none;background:var(--blue);border-radius:12px;padding:12px 14px;font-size:14px;font-weight:800;cursor:pointer;color:#fff;font-family:'DM Sans',sans-serif;margin-top:6px">
+        <span style="background:#fff;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center"><svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg></span>
+        Continuar com Google
+      </button>
+      <div id="conviteErr" class="login-error"></div>
+      <div style="text-align:center;margin-top:14px">
+        <button type="button" onclick="conviteSairDoModo()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;font-family:'DM Sans',sans-serif;text-decoration:underline">Já tenho usuário e senha — entrar normalmente</button>
+      </div>
+    </div>
+
     <div id="loginScreen">
       <div id="conviteAviso" style="display:none;background:#EAF7EE;border:1px solid #BFE3C8;border-radius:10px;padding:12px 14px;font-size:12.5px;color:#17633A;margin-bottom:14px;line-height:1.5">
         🎟️ <b>Você recebeu um convite</b> para a Comissão de Revisão de Prontuários. Clique em <b>Entrar com Google</b> abaixo e escolha a sua conta Google.
@@ -1626,9 +1646,35 @@ function conviteDaUrl(){
   return c;
 }
 function conviteAvisoRender(){
-  var el=document.getElementById('conviteAviso'); if(!el) return;
   var c=''; try{ c=sessionStorage.getItem(CONVITE_KEY)||''; }catch(e){}
-  el.style.display=(c && !currentUser)?'block':'none';
+  var modo=!!(c && !currentUser);
+  var av=document.getElementById('conviteAviso'); if(av) av.style.display='none';
+  var cs=document.getElementById('conviteScreen'), ls=document.getElementById('loginScreen');
+  if(!cs || !ls) return;
+  if(modo){
+    ['firstAccessScreen','forgotScreen','resetScreen'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display='none'; });
+    ls.style.display='none'; cs.style.display='block';
+    var sel=document.getElementById('cvtSetor'); if(sel && !sel.options.length) sel.innerHTML=setorOpcoesHtml('');
+    var t=document.getElementById('loginPanelTitle'); if(t) t.textContent='Convite para a Comissão';
+    var st=document.getElementById('loginPanelSub'); if(st) st.textContent='Confirme seus dados para entrar';
+  } else if(cs.style.display==='block'){
+    cs.style.display='none'; ls.style.display='block';
+    var t2=document.getElementById('loginPanelTitle'); if(t2) t2.textContent='Acesso à coleta';
+    var st2=document.getElementById('loginPanelSub'); if(st2) st2.textContent='Faça login para auditar prontuários';
+  }
+}
+function conviteSairDoModo(){
+  try{ sessionStorage.removeItem(CONVITE_KEY); }catch(e){}
+  conviteAvisoRender();
+}
+/* Confere o nome digitado com o do convite: primeiro e último nome iguais (sem acento/maiúscula). */
+function nomeChave(n){
+  var p=mSemAcento(n).toLowerCase().replace(/[^a-z ]/g,' ').split(/\s+/).filter(function(x){ return x && ['da','de','do','das','dos','e'].indexOf(x)<0; });
+  return p.length ? {primeiro:p[0], ultimo:p[p.length-1], n:p.length} : null;
+}
+function nomeConfere(digitado, oficial){
+  var a=nomeChave(digitado), b=nomeChave(oficial);
+  return !!(a && b && a.n>=2 && a.primeiro===b.primeiro && a.ultimo===b.ultimo);
 }
 function googleProvider(){ var p=new firebase.auth.GoogleAuthProvider(); p.setCustomParameters({prompt:'select_account'}); return p; }
 function temSenha(u){ return !!(u && (u.providerData||[]).some(function(p){ return p && p.providerId==='password'; })); }
@@ -1649,10 +1695,12 @@ function msgErroGoogle(e){
 var MSG_SEM_CADASTRO='Esta conta Google não está cadastrada na plataforma.<br>• Se você já tem <b>usuário e senha</b>, entre com eles e vincule o Google em <b>"Ver meu perfil"</b>.<br>• Se você é novo(a) na Comissão, peça um <b>convite</b> à presidência.';
 
 /* Resgata o convite para a conta Google recém-logada. Retorna o login. Ordem exigida pelas regras. */
-async function conviteResgatar(code, u){
+async function conviteResgatar(code, u, nomeDigitado){
   var snap=await fbDB.ref('convites/'+code).once('value');
   var c=snap.val();
   if(!c || !c.login) throw new Error('Convite inválido. Peça um novo link à presidência.');
+  if(nomeDigitado!=null && !c.usadoPor && !nomeConfere(nomeDigitado, c.nome))
+    throw new Error('O nome informado não confere com o convite. Escreva seu nome completo como a presidência cadastrou (ao menos o primeiro e o último nome) e tente de novo.');
   if(c.cancelado===true) throw new Error('Este convite foi cancelado. Peça um novo link à presidência.');
   if(c.usadoPor && c.usadoPor!==u.uid) throw new Error('Este convite já foi usado. Cada link vale para uma pessoa só — peça um novo à presidência.');
   if(!c.usadoPor && Number(c.expira)<Date.now()) throw new Error('Este convite venceu. Peça um novo link à presidência.');
@@ -1670,9 +1718,19 @@ async function conviteResgatar(code, u){
   return c.login;
 }
 
-async function entrarComGoogle(){
-  var err=$('loginErr'), btn=document.getElementById('btnGoogle');
+async function entrarComGoogle(origem){
+  var modoConvite = origem==='convite';
+  var err=modoConvite?document.getElementById('conviteErr'):$('loginErr');
+  var btn=document.getElementById(modoConvite?'btnGoogleConvite':'btnGoogle');
   if(err) err.textContent='';
+  var nomeDig=null, setorDig='';
+  if(modoConvite){
+    nomeDig=String((document.getElementById('cvtNome')||{}).value||'').trim().replace(/\s+/g,' ');
+    var sv=(document.getElementById('cvtSetor')||{}).value||'';
+    setorDig=(sv==='__outro__' ? String((document.getElementById('cvtSetorOutro')||{}).value||'') : sv).trim().replace(/\s+/g,' ').slice(0,120);
+    if(!nomeChave(nomeDig) || nomeChave(nomeDig).n<2){ if(err) err.textContent='Informe seu nome completo (nome e sobrenome).'; return; }
+    if(!setorDig){ if(err) err.textContent='Escolha o setor em que você trabalha.'; return; }
+  }
   initFirebase();
   if(!fbAuth){ if(err) err.textContent='Serviço indisponível. Recarregue a página.'; return; }
   var code=''; try{ code=sessionStorage.getItem(CONVITE_KEY)||''; }catch(e){}
@@ -1698,7 +1756,7 @@ async function entrarComGoogle(){
       try{ login=(await fbDB.ref('uid_login/'+u.uid+'/login').once('value')).val(); }catch(e){ login=null; }
       if(login){ try{ await fbDB.ref('login_uid/'+login).set(u.uid); }catch(e){} }   // conclui resgate interrompido (idempotente)
       if(!login && code){
-        try{ login=await conviteResgatar(code,u); }
+        try{ login=await conviteResgatar(code,u,nomeDig); }
         catch(e){
           try{ if(nova) await u.delete(); else await fbAuth.signOut(); }catch(_){ try{ await fbAuth.signOut(); }catch(__){} }
           if(err) err.textContent=(e && e.message) || 'Não foi possível usar o convite.';
@@ -1719,6 +1777,7 @@ async function entrarComGoogle(){
       return;
     }
     USUARIOS[login]=acesso.nome;
+    if(setorDig){ try{ await fbDB.ref('perfis/'+login).update({setor:setorDig}); }catch(e){ console.warn('setor:', e && e.message); } }
     try{ sessionStorage.removeItem(CONVITE_KEY); }catch(e){}
     conviteAvisoRender();
     clearLoginAttempts();
@@ -1905,9 +1964,9 @@ try{ conviteDaUrl(); }catch(e){}
 document.addEventListener('DOMContentLoaded',function(){ try{ conviteAvisoRender(); }catch(e){} });
 window.addEventListener('load',function(){
   try{
-    conviteAvisoRender();
     var c=sessionStorage.getItem(CONVITE_KEY)||'';
     if(c && !currentUser){ var t=document.getElementById('tab-coleta'); if(t) requestColeta(t); }
+    conviteAvisoRender();
   }catch(e){}
 });
 
@@ -2096,6 +2155,7 @@ function showLoginScreen(){
     const el=document.getElementById(id);
     if(el) el.textContent='';
   });
+  try{ conviteAvisoRender(); }catch(e){}
 }
 
 /* tryLogin — com detecção de primeiro acesso */
