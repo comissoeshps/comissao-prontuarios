@@ -762,7 +762,7 @@ tr:hover td{background:#FAFCFF}
         <span class="chip chip-blue">Registro obrigatório</span>
       </div>
       <div class="meta">
-        <div class="field"><label>Data da auditoria <span title="Preenchida automaticamente pelo relógio do servidor. Ao continuar uma auditoria parcial, vale a data em que ela começou." style="cursor:help;color:var(--muted)">🔒</span></label><input id="auditDate" type="date" readonly tabindex="-1" style="background:var(--soft);color:var(--muted);cursor:not-allowed" title="Preenchida automaticamente — não pode ser alterada"></div>
+        <div class="field"><label title="Preenchida automaticamente com a data de hoje (relógio do servidor). Pode ser alterada se necessário; não aceita data futura.">Data da auditoria</label><input id="auditDate" type="date" oninput="_dataAuditoriaEditada=true"></div>
         <div class="field"><label>Número de atendimento</label><input id="attendance" type="text" placeholder="Ex.: 2025/123456" onblur="checkAttendance()"></div>
         <div class="field"><label>Setor(es) auditado(s)</label><div id="sectorMsel"></div><input type="hidden" id="sector"></div>
         <div class="field"><label>Tipo de internação</label><select id="tipoInt"><option value="">Selecione</option><option>Clínica (eletiva)</option><option>Cirúrgica (eletiva)</option><option>Urgência / Emergência</option><option>Obstétrica</option><option>Pediátrica</option><option>Neonatal</option><option>Não se aplica (pronto-atendimento)</option></select></div>
@@ -1392,6 +1392,7 @@ function membrosAplicar(db){
   auds.sort(function(a,b){ return a.localeCompare(b,'pt-BR'); });
   AUDITORES.length=0; auds.forEach(function(a){ AUDITORES.push(a); });
   try{ fillAuditores(); }catch(e){}
+  try{ abasAplicar(); }catch(e){}
 }
 
 /* Lista para a grade de perfis (aba Membros): Firebase se houver, senão reserva */
@@ -1559,10 +1560,10 @@ function membrosAdminRender(){
       +'<button class="primary" style="margin-top:8px;padding:8px 14px" onclick="membrosImportar()">Completar lista (importar os '+faltam.length+' que faltam)</button></div></div>';
   }
   h+='<div style="margin-top:16px;padding-top:12px;border-top:1px dashed var(--line)">'
-    +'<div style="font-weight:800;color:var(--navy);margin-bottom:6px">Abas visíveis para os auditores</div>'
-    +'<label style="font-size:13px;display:inline-flex;gap:8px;align-items:center;cursor:pointer">'+mChk('cfgResAud',CFG_PLAT.resultados_auditores!==false)+' Aba <b>Resultados</b></label>'
+    +'<div style="font-weight:800;color:var(--navy);margin-bottom:6px">Abas visíveis para os membros efetivos</div>'
+    +'<label style="font-size:13px;display:inline-flex;gap:8px;align-items:center;cursor:pointer">'+mChk('cfgResAud',CFG_PLAT.resultados_auditores===true)+' Aba <b>Resultados</b> para membros efetivos</label>'
     +' <button class="secondary" style="padding:6px 12px;margin-left:8px" onclick="cfgPlatSalvar()">Salvar</button>'
-    +'<div style="font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.5">Desligado: a aba some para todos os membros, menos você. Vale na hora para quem estiver logado. '
+    +'<div style="font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.5">Padrão: <b>desligado</b> — membros efetivos não veem a aba Resultados (as demais abas continuam); a diretoria (presidente, vice e secretário/a) sempre vê Resultados. Vale na hora para quem estiver logado. '
     +'É só visual — não é barreira de segurança para os dados.</div></div>';
   if(!logins.length){ h+='<div id="membrosAdminMsg" style="font-size:12px;margin-top:10px;min-height:16px"></div></div>'; box.innerHTML=h; return; } // sem "Adicionar" antes de importar
   h+='<div style="margin-top:16px;padding-top:12px;border-top:1px dashed var(--line)">';
@@ -1750,7 +1751,7 @@ async function membroRestaurar(login){
    • Continuação de auditoria parcial: mantém a data ORIGINAL (de quando começou).
    • O Apps Script (V10) impõe a mesma regra no servidor: na inserção grava a hora dele;
      na atualização nunca altera data_auditoria. O que o navegador mandar é ignorado. */
-var _relogioOffset=null, _dataAuditoriaOriginal='';
+var _relogioOffset=null, _dataAuditoriaOriginal='', _dataAuditoriaEditada=false;
 async function relogioSincronizar(){
   try{
     initFirebase();
@@ -1773,19 +1774,39 @@ function dataParaInput(v){
   var d=new Date(s); if(!isNaN(d.getTime())) return fmtSaoPaulo(d.getTime(), false);
   return '';
 }
-async function dataAuditoriaHoje(){
+async function dataAuditoriaHoje(forcar){
   var el=document.getElementById('auditDate'); if(!el) return;
-  el.value=fmtSaoPaulo(relogioAgora(), false);          // imediato (offset já sincronizado ou 0)
+  if(forcar) _dataAuditoriaEditada=false;
+  if(_dataAuditoriaEditada && el.value) return;          // auditor escolheu outra data: respeitar
+  el.value=fmtSaoPaulo(relogioAgora(), false);           // imediato (offset já sincronizado ou 0)
   await relogioSincronizar();
-  if(!_dataAuditoriaOriginal) el.value=fmtSaoPaulo(relogioAgora(), false);
+  if(!_dataAuditoriaOriginal && !(_dataAuditoriaEditada && el.value)) el.value=fmtSaoPaulo(relogioAgora(), false);
+}
+/* Valor enviado: data do campo. Se não mudou na continuação → a original (com hora).
+   Se é hoje → hoje + hora do servidor. Outra data escolhida pelo auditor → só a data. */
+function dataAuditoriaParaGravar(){
+  var v=(document.getElementById('auditDate')||{}).value||'';
+  var hoje=fmtSaoPaulo(relogioAgora(), false);
+  if(_dataAuditoriaOriginal && dataParaInput(_dataAuditoriaOriginal)===v) return _dataAuditoriaOriginal;
+  if(!v || v===hoje) return fmtSaoPaulo(relogioAgora(), true);
+  return v;
+}
+/* Garante a data preenchida ao abrir a página: se não há auditoria anterior carregada, mostra hoje. */
+function dataAuditoriaGarantir(){
+  var el=document.getElementById('auditDate'); if(!el) return;
+  if(_dataAuditoriaEditada && el.value) return;
+  if(_dataAuditoriaOriginal){ var v=dataParaInput(_dataAuditoriaOriginal); if(v) el.value=v; return; }
+  dataAuditoriaHoje();
 }
 function dataAuditoriaFixar(original){
-  _dataAuditoriaOriginal=String(original||'');
+  _dataAuditoriaOriginal=String(original||''); _dataAuditoriaEditada=false;
   var el=document.getElementById('auditDate'); if(!el) return;
   var v=dataParaInput(original);
   if(v) el.value=v;
 }
-try{ relogioSincronizar(); }catch(e){}
+try{ relogioSincronizar().then(function(){ try{ dataAuditoriaGarantir(); }catch(e){} }); }catch(e){}
+try{ dataAuditoriaGarantir(); }catch(e){}
+document.addEventListener('visibilitychange',function(){ if(!document.hidden){ try{ dataAuditoriaGarantir(); }catch(e){} } });
 
 /* === LOGIN COM GOOGLE + CONVITES (2026-10-13) ===================================
    • Conta clássica (login@comissaohps.local) pode VINCULAR o Google no perfil → mesma conta, mesmo uid.
@@ -2202,12 +2223,18 @@ window.addEventListener('load',function(){
    Firebase: config_plataforma/resultados_auditores (bool). Leitura: autorizados; escrita: só owner.
    Ausente ou ilegível = visível (comportamento anterior). É controle de INTERFACE,
    não de acesso a dados (a base continua acessível pelo Apps Script a qualquer autorizado). */
-var CFG_PLAT={resultados_auditores:true, excluidos:{}};
+var CFG_PLAT={resultados_auditores:false, excluidos:{}};
 var _cfgPlatRef=null;
+/* 2026-10-14: Resultados — diretoria (presidente, vice, secretário) sempre vê;
+   membro efetivo só vê se o presidente ligar "Resultados para membros efetivos" (padrão: DESLIGADO).
+   Papel desconhecido (lista ainda carregando) = tratado como membro efetivo. */
+function papelAtual(){ try{ var m=MEMBROS_DB&&currentUser&&MEMBROS_DB[currentUser.login]; return (m&&m.papel)||'membro'; }catch(e){ return 'membro'; } }
 function podeVerResultados(){
   if(!currentUser) return false;
   if(currentUser.login===OWNER_LOGIN) return true;
-  return CFG_PLAT.resultados_auditores!==false;
+  var p=papelAtual();
+  if(p==='presidente' || p==='vice' || p==='secretario') return true;
+  return CFG_PLAT.resultados_auditores===true;
 }
 function abasAplicar(){
   var b=document.getElementById('tab-resultados'); if(!b) return;
@@ -2226,7 +2253,7 @@ function cfgPlatCarregar(){
     _cfgPlatRef=fbDB.ref('config_plataforma');
     _cfgPlatRef.on('value', function(snap){
       var v=snap.val()||{};
-      CFG_PLAT.resultados_auditores = (v.resultados_auditores!==false);
+      CFG_PLAT.resultados_auditores = (v.resultados_auditores===true);
       CFG_PLAT.excluidos = (v.excluidos && typeof v.excluidos==='object') ? v.excluidos : {};
       abasAplicar();
       if(_membrosAdminAberto) membrosAdminRender();
@@ -2235,7 +2262,7 @@ function cfgPlatCarregar(){
 }
 function cfgPlatDesligar(){
   if(_cfgPlatRef){ try{ _cfgPlatRef.off(); }catch(e){} _cfgPlatRef=null; }
-  CFG_PLAT={resultados_auditores:true, excluidos:{}};
+  CFG_PLAT={resultados_auditores:false, excluidos:{}};
 }
 async function cfgPlatSalvar(){
   try{
@@ -2244,7 +2271,7 @@ async function cfgPlatSalvar(){
     var on=!!(document.getElementById('cfgResAud')||{}).checked;
     await fbDB.ref('config_plataforma').update({resultados_auditores:on});
     CFG_PLAT.resultados_auditores=on; abasAplicar();
-    mMsg('✔ Aba Resultados '+(on?'visível':'oculta')+' para os auditores.',true);
+    mMsg('✔ Aba Resultados '+(on?'visível':'oculta')+' para os membros efetivos.',true);
   }catch(e){ mMsg('Erro ao salvar: '+(mIsPermDenied(e)?'permissão negada (a regra config_plataforma já foi publicada no Firebase?)':(e.message||e)),false); }
 }
 
@@ -2488,6 +2515,7 @@ function updateColetaTabLabel(){
 }
 function completeLogin(user){
   clearLoginAttempts();
+  try{ dataAuditoriaGarantir(); }catch(e){}
   startInactivityTimer(); // iniciar timer de expiração por inatividade
   currentUser={login:user, name:USUARIOS[user]};
   sessionStorage.setItem('hps_user', JSON.stringify(currentUser));
@@ -4030,6 +4058,7 @@ function removeRegimento(key){
 
 function requestColeta(btn){
   show('coleta', btn);
+  try{ dataAuditoriaGarantir(); }catch(e){}
   if(currentUser){
     var lp=document.getElementById('loginPanel'); if(lp) lp.style.display='none';
     var cf=document.getElementById('coletaForm'); if(cf) cf.style.display='block';
@@ -4065,7 +4094,7 @@ function clearForm(){
   ['attendance','diasIntern'].forEach(id=>{const el=$(id);if(el)el.value=''});
   // Preencher data de hoje em horário de Brasília
   _dataAuditoriaOriginal='';
-  dataAuditoriaHoje();
+  dataAuditoriaHoje(true);
   ['sector','tipoInt','desfecho'].forEach(id=>{const el=$(id);if(el)el.value=''});
   selSetores=[]; setorItens={}; renderSectorMsel(); renderSectorItemsPanel();
   onDesfechoChange(''); // resetar campo dias de internação
@@ -4103,6 +4132,7 @@ function save(){
   }
   var faltandoId=[];
   if(!$('auditDate').value) faltandoId.push('data da auditoria');
+  else if($('auditDate').value > fmtSaoPaulo(relogioAgora(), false)){ alert('A data da auditoria não pode ser no futuro.'); return; }
   if(!$('attendance').value.trim()) faltandoId.push('numero de atendimento');
   if(!$('sector').value) faltandoId.push('setor auditado');
   if(faltandoId.length){
@@ -4163,7 +4193,7 @@ function save(){
 
   var record={
     id:existingRecordId||Date.now(),
-    date:_dataAuditoriaOriginal ? _dataAuditoriaOriginal : fmtSaoPaulo(relogioAgora(), true),   // continuação mantém a data original
+    date:dataAuditoriaParaGravar(),
     attendance:$('attendance').value.trim(),
     sector:$('sector').value,
     tipoInt:$('tipoInt').value,
@@ -4464,7 +4494,7 @@ async function checkAttendance(){
   const box=$('attendanceStatus');
   existingRecordId=null; lockedItemNums=new Set(); lockedFisico=new Set(); blockedSubmit=false; sheetsDown=false;
 
-  _dataAuditoriaOriginal=''; dataAuditoriaHoje();
+  _dataAuditoriaOriginal=''; dataAuditoriaHoje();   // não apaga uma data escolhida pelo auditor
   if(!att){box.style.display='none';box.innerHTML='';renderForm();return;}
 
   if(!SHEETS_WEBAPP_URL||SHEETS_WEBAPP_URL==='COLE_AQUI_A_URL_DO_SEU_APPS_SCRIPT'){
