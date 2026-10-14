@@ -344,6 +344,19 @@ tr:hover td{background:#FAFCFF}
 .stat-label{font-size:11px;color:var(--muted);margin-top:2px}
 .att-list{display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto}
 .att-item{display:flex;justify-content:space-between;align-items:center;background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:9px 14px;font-size:13px}
+/* PERFIL — status da auditoria (finalizada = verde claro; parcial = amarelo) */
+.att-item.att-ok{background:#EAF7EF;border-color:#B5E0C4;border-left:4px solid var(--green)}
+.att-item.att-pend{background:#FFF6D6;border-color:#EBCB6B;border-left:4px solid var(--amber)}
+body.dark .att-item.att-ok{background:rgba(23,138,74,.16);border-color:rgba(23,138,74,.45);border-left-color:var(--green)}
+body.dark .att-item.att-pend{background:rgba(199,138,20,.18);border-color:rgba(199,138,20,.55);border-left-color:var(--amber)}
+.att-badge{display:inline-block;font-size:10.5px;font-weight:800;border-radius:999px;padding:2px 8px;margin-top:3px;letter-spacing:.02em}
+.att-badge.ok{background:rgba(23,138,74,.14);color:var(--green)}
+.att-badge.pend{background:rgba(199,138,20,.18);color:#8A5E00}
+body.dark .att-badge.pend{color:#F2C14E}
+.att-cont-btn{margin-top:6px;border:1.5px solid var(--amber);background:var(--amber);color:#fff;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit}
+.att-cont-btn:hover{filter:brightness(.93)}
+.att-legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin:0 0 8px}
+.att-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
 .att-num{font-family:'DM Mono',monospace;font-weight:700;color:var(--navy)}
 .att-meta{font-size:11px;color:var(--muted)}
 .chat-container{display:flex;flex-direction:column;height:500px;background:#fff;border-radius:16px;border:1px solid var(--line);overflow:hidden}
@@ -2283,7 +2296,7 @@ const EJS_PUBLIC_KEY= '3dg3sVzUT66piP8ep';
 
 let fbApp=null,fbDB=null,currentUser=null;
 let current={},data=[],charts=[];
-let existingRecordId=null,lockedItemNums=new Set(),lockedFisico=new Set(),blockedSubmit=false,sheetsDown=false;
+let existingRecordId=null,lockedItemNums=new Set(),lockedFisico=new Set(),blockedSubmit=false,sheetsDown=false,blockedMotivo='',_salvandoAuditoria=false;
 let currentFisico={},pendingFiles=[];
 let mediaRecorder=null,audioChunks=[],isRecording=false;
 
@@ -2896,9 +2909,11 @@ function buildProfilePage(){
     <div class="stat-grid">
       <div class="stat-card"><div class="stat-num" id="statTotal">—</div><div class="stat-label">Total de auditorias</div></div>
       <div class="stat-card"><div class="stat-num" id="statMonth">—</div><div class="stat-label">Neste mês</div></div>
+      <div class="stat-card"><div class="stat-num" id="statPend" style="color:var(--amber)">—</div><div class="stat-label">Pendentes (parciais)</div></div>
       
     </div>
     <div class="panel-head" style="margin-top:4px"><div><h2>Prontuários auditados</h2></div></div>
+    <div class="att-legend"><span><i style="background:#B5E0C4"></i>Finalizada</span><span><i style="background:#EBCB6B"></i>Parcial — clique em <b>Continuar</b> para completar</span></div>
     <div id="myAttendances" class="att-list"><div style="color:var(--muted);font-size:13px">Carregando…</div></div>
   </div>
 
@@ -3150,7 +3165,7 @@ async function loadMyAuditorias(){
       apiCall('list'),
       apiCall('listAnexos').catch(()=>null)
     ]);
-    if(json.status!=='ok') return;
+    if(json.status!=='ok'||!Array.isArray(json.rows)){ $('myAttendances').innerHTML='<div style="color:var(--red);font-size:13px">Não foi possível carregar suas auditorias agora'+(json&&json.message?' ('+escapeHtml(String(json.message))+')':'')+'. Reabra o perfil para tentar de novo.</div>'; return; }
 
     // Mapear anexos por número de atendimento (apenas do auditor atual)
     let anexosByAtt={};
@@ -3168,32 +3183,51 @@ async function loadMyAuditorias(){
       }catch(e){ console.warn('Erro ao carregar anexos:', e); }
     }
 
-    const myRecords=json.rows.filter(r=>String(r.auditor||'').trim()===currentUser.name);
+    // Linha que vale para cada nº = a PRIMEIRA da planilha (é a que o servidor atualiza; mesmo critério do checkAttendance)
+    const ultimoPorAtt={};
+    json.rows.forEach(function(r){ const a=String(r.numero_atendimento||'').trim(); if(a && !(a in ultimoPorAtt)) ultimoPorAtt[a]=r; });
+    // Minhas auditorias, uma por nº de atendimento (a mais recente)
+    const meusPorAtt={};
+    json.rows.forEach(function(r){
+      if(String(r.auditor||'').trim()!==currentUser.name) return;
+      const a=String(r.numero_atendimento||'').trim(); if(!a) return;
+      meusPorAtt[a]=r;
+    });
+    const myRecords=Object.keys(meusPorAtt).map(function(a){
+      const r=meusPorAtt[a];
+      const ult=ultimoPorAtt[a]||r;
+      const st=statusAuditoriaLinha(ult);
+      const doMesmo=String(ult.auditor||'').trim()===currentUser.name;
+      return {r:r, ult:ult, att:a, st:st, podeContinuar:(!st.completo && (doMesmo||isAdmin()))};
+    });
     const total=myRecords.length;
-    const now=new Date();
-    const thisMonth=myRecords.filter(r=>{
-      const d=new Date(r.data_auditoria);
-      return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();
-    }).length;
+    const pendentes=myRecords.filter(x=>!x.st.completo).length;
+    const mesAtual=fmtSaoPaulo(relogioAgora(), false).slice(0,7);
+    const thisMonth=myRecords.filter(x=>dataParaInput(x.r.data_auditoria).slice(0,7)===mesAtual).length;
     $('statTotal').textContent=total;
     $('statMonth').textContent=thisMonth;
+    if($('statPend')) $('statPend').textContent=pendentes;
 
     const list=$('myAttendances');
     if(!myRecords.length){
       list.innerHTML='<div style="color:var(--muted);font-size:13px">Nenhuma auditoria registrada ainda.</div>';
       return;
     }
+    const chaveData=function(v){ const s=String(v||''); return dataParaInput(s)+' '+(/\d{2}:\d{2}/.exec(s.slice(10))||[''])[0]; };
 
     list.innerHTML=myRecords
-      .sort((a,b)=>String(b.data_auditoria||'').localeCompare(String(a.data_auditoria||'')))
-      .map(function(r){
-        const att=String(r.numero_atendimento||'').trim();
+      .sort(function(a,b){
+        if(a.st.completo!==b.st.completo) return a.st.completo?1:-1;   // pendentes primeiro
+        return chaveData(b.r.data_auditoria).localeCompare(chaveData(a.r.data_auditoria));
+      })
+      .map(function(x){
+        const r=x.r, att=x.att, st=x.st;
         const anexos=anexosByAtt[att]||[];
-        const pct=Number(r.conformidade_geral_pct||0);
+        const pct=Number(x.ult.conformidade_geral_pct||0);
         const cor=pct>=90?'var(--green)':pct>=75?'var(--amber)':'var(--red)';
 
         // Formatar data
-        let dataStr=r.data_auditoria||'';
+        let dataStr=String(r.data_auditoria||'');
         if(dataStr && dataStr.length>=10){
           const p=dataStr.substring(0,10).split('-');
           if(p.length===3) dataStr=p[2]+'/'+p[1]+'/'+p[0]+(dataStr.length>10?' '+dataStr.substring(11,16):'');
@@ -3206,7 +3240,7 @@ async function loadMyAuditorias(){
             var isImg=String(a.tipo||'').includes('image');
             var nome=String(a.nome_arquivo||'arquivo');
             // 2d: arquivo é privado — baixado sob demanda via API autenticada
-            return '<button type="button" onclick="abrirAnexo(\''+escapeHtml(String(a.file_id||''))+'\')" title="'+escapeHtml(nome)+'" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;background:var(--soft);border:1px solid var(--line);border-radius:7px;padding:3px 8px 3px 4px;font-size:11px;color:var(--navy);font-weight:600;font-family:inherit">'
+            return '<button type="button" data-fid="'+escapeHtml(String(a.file_id||''))+'" onclick="abrirAnexo(this.dataset.fid)" title="'+escapeHtml(nome)+'" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;background:var(--soft);border:1px solid var(--line);border-radius:7px;padding:3px 8px 3px 4px;font-size:11px;color:var(--navy);font-weight:600;font-family:inherit">'
               +'<span>'+(isImg?'🖼':'📄')+'</span>'
               +'<span style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(nome.substring(0,30))+'</span>'
               +'</button>';
@@ -3217,17 +3251,66 @@ async function loadMyAuditorias(){
             +'</div>';
         }
 
-        return '<div class="att-item" style="flex-direction:column;align-items:stretch;gap:0">'
-          +'<div style="display:flex;justify-content:space-between;align-items:center">'
-          +'<div><div class="att-num">'+att+'</div><div class="att-meta">'+(r.setor_auditado||'—')+'</div></div>'
-          +'<div style="text-align:right"><div style="font-size:11px;color:var(--muted)">'+dataStr+'</div>'
-          +'<div style="font-size:12px;font-weight:700;color:'+cor+'">'+pct+'%</div></div>'
+        let direita;
+        if(st.completo){
+          direita='<div style="font-size:11px;color:var(--muted)">'+escapeHtml(dataStr)+'</div>'
+            +'<div style="font-size:12px;font-weight:700;color:'+cor+'">'+pct+'%</div>'
+            +'<span class="att-badge ok">✓ Finalizada</span>';
+        } else {
+          direita='<div style="font-size:11px;color:var(--muted)">'+escapeHtml(dataStr)+'</div>'
+            +'<span class="att-badge pend" title="'+st.respondidos+' de '+st.total+' itens respondidos">⏳ Pendente — falta(m) '+st.faltam+' item(ns)</span>'
+            +(x.podeContinuar
+              ? '<div><button type="button" class="att-cont-btn" data-att="'+escapeHtml(att)+'" onclick="perfilContinuarAuditoria(this.dataset.att)">▶ Continuar</button></div>'
+              : '<div style="font-size:11px;color:var(--muted);margin-top:4px">Em andamento por outro auditor</div>');
+        }
+
+        return '<div class="att-item '+(st.completo?'att-ok':'att-pend')+'" data-status="'+(st.completo?'completa':'parcial')+'" style="flex-direction:column;align-items:stretch;gap:0">'
+          +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px">'
+          +'<div style="min-width:0"><div class="att-num">'+escapeHtml(att)+'</div><div class="att-meta">'+escapeHtml(r.setor_auditado||'—')+'</div></div>'
+          +'<div style="text-align:right">'+direita+'</div>'
           +'</div>'
           +anexosHtml
           +'</div>';
       }).join('');
 
-  }catch(e){ console.error('Erro ao carregar auditorias:',e); }
+  }catch(e){ console.error('Erro ao carregar auditorias:',e); var _l=$('myAttendances'); if(_l) _l.innerHTML='<div style="color:var(--red);font-size:13px">Não foi possível carregar suas auditorias (erro de conexão). Reabra o perfil para tentar de novo.</div>'; }
+}
+
+/* PERFIL — status de uma linha da planilha. MESMO critério do checkAttendance:
+   escopo pelo tipo de prontuário (online: ITEMS; físico: ITEMS_FISICO; ambos: os dois)
+   + presença das 4 equipes multiprofissionais; válidos = sim / nao / na. */
+function statusAuditoriaLinha(row){
+  const rec=rowToRecord(row||{});
+  const tp=String(rec.tipoProntuario||'online').toLowerCase();
+  const valid=['sim','nao','na'];
+  const on=(tp!=='fisico')?ITEMS:[];
+  const fis=(tp!=='online')?ITEMS_FISICO:[];
+  const fa=rec.fisAnswers||{};
+  const faltaOn=on.filter(i=>valid.indexOf(rec.answers[i.num])<0).length;
+  const faltaFis=fis.filter(i=>valid.indexOf(fa[i.num])<0).length;
+  const faltaMulti=EQUIPES.map(eq=>eq.keyPresenca).filter(k=>valid.indexOf(rec.answers[k])<0).length;
+  const total=on.length+fis.length+EQUIPES.length;
+  const faltam=faltaOn+faltaFis+faltaMulti;
+  return {completo:faltam===0, faltam:faltam, total:total, respondidos:total-faltam};
+}
+
+/* PERFIL → "Continuar": abre Iniciar Auditoria com o nº preenchido. O checkAttendance
+   re-consulta a planilha (fonte da verdade), pré-marca e trava os itens já respondidos
+   e libera só os pendentes. Se o banco cair, o fail-closed continua valendo. */
+async function perfilContinuarAuditoria(att){
+  att=String(att||'').trim();
+  if(!att||!currentUser) return;
+  const atual=(($('attendance')&&$('attendance').value)||'').trim();
+  const temDados=Object.keys(current||{}).length+Object.keys(currentFisico||{}).length;
+  if(temDados && atual!==att){
+    if(!confirm('Há uma auditoria em andamento'+(atual?' (atendimento '+atual+')':'')+' que ainda não foi salva.\n\nDescartar e continuar o atendimento '+att+'?')) return;
+  }
+  requestColeta(document.getElementById('tab-coleta'));
+  clearForm();
+  $('attendance').value=att;
+  await checkAttendance();
+  const box=$('attendanceStatus');
+  if(box&&box.scrollIntoView){ try{ box.scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){} }
 }
 
 
@@ -3723,11 +3806,11 @@ function renderFileList(){
 ═══════════════════════════════════════════════ */
 
 // Coleta todas as keys multiprofissionais para scoring
-function load(){try{data=JSON.parse(sessionStorage.getItem(KEY)||localStorage.getItem(KEY)||'[]')}catch(e){data=[]}}
-// Migrar dados antigos do localStorage para sessionStorage
-(function(){try{const old=localStorage.getItem(KEY);if(old){sessionStorage.setItem(KEY,old);localStorage.removeItem(KEY);}}catch(e){}})();
+/* 2026-10-14: NENHUM dado de auditoria fica no navegador. A única fonte é o servidor (Apps Script → planilha oficial).
+   load() apaga cópias antigas que versões anteriores deixaram em sessionStorage/localStorage. */
+function load(){ data=[]; try{ sessionStorage.removeItem(KEY); }catch(e){} try{ localStorage.removeItem(KEY); }catch(e){} }
 
-function persist(){try{sessionStorage.setItem(KEY,JSON.stringify(data))}catch(e){}}
+function persist(){ /* desativado em 2026-10-14: auditorias não são gravadas no navegador */ }
 
 function show(id,btn){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -4089,7 +4172,7 @@ function setVal(key,val){
 
 function clearForm(){
   current={};
-  existingRecordId=null; lockedItemNums=new Set(); lockedFisico=new Set(); blockedSubmit=false; sheetsDown=false;
+  existingRecordId=null; lockedItemNums=new Set(); lockedFisico=new Set(); blockedSubmit=false; sheetsDown=false; blockedMotivo='';
   // Limpar campos — auditor NÃO é resetado (fica sempre o do login)
   ['attendance','diasIntern'].forEach(id=>{const el=$(id);if(el)el.value=''});
   // Preencher data de hoje em horário de Brasília
@@ -4126,8 +4209,11 @@ function save(){
     alert('O banco de dados esta indisponivel. Nao e possivel prosseguir com a auditoria ate confirmar que este atendimento ainda nao foi auditado. Use o botao "Tentar novamente" no aviso acima do formulario.');
     return;
   }
+  if(_salvandoAuditoria) return;
   if(blockedSubmit && !isAdmin()){
-    alert('Este atendimento ja foi auditado completamente. Informe outro numero de atendimento.');
+    alert(blockedMotivo==='parcial_outro'
+      ? 'Esta auditoria parcial foi iniciada por outro auditor. Somente quem a iniciou pode finaliza-la.\n\nVoce pode apenas visualizar os itens ja marcados. Informe outro numero de atendimento.'
+      : 'Este atendimento ja foi auditado completamente. Informe outro numero de atendimento.');
     return;
   }
   var faltandoId=[];
@@ -4206,41 +4292,51 @@ function save(){
     answers:Object.assign({},current),
     fisAnswers:Object.assign({},currentFisico)
   };
-  data.push(record);
-  persist();
-  sendToSheets(record);
+  // 2026-10-14: nada fica no navegador. Grava no servidor e só limpa o formulário depois da confirmação.
+  var wasParcial=pendingItems.length>0||pendingFisico.length>0||pendingMulti.length>0;
+  salvarAuditoriaServidor(record, wasParcial, pendingFiles.slice());
+}
 
-  // Guardar referência dos arquivos e dados ANTES do clearForm()
-  var filesToUpload=pendingFiles.slice();
-  var uploadAtt=record.attendance;
-  var uploadAud=record.auditor;
-  console.log('[SAVE] pendingFiles antes do clearForm:', pendingFiles.length, '| filesToUpload:', filesToUpload.length);
-
-  clearForm();
-  window.scrollTo({top:0,behavior:'smooth'});
-
-  // Mostrar mensagem de status ANTES do alert para não bloquear o upload
+async function salvarAuditoriaServidor(record, wasParcial, filesToUpload){
+  if(_salvandoAuditoria) return;
+  _salvandoAuditoria=true;
+  var btn=document.querySelector('button.primary[onclick="save()"]');
+  var btnTxt=btn?btn.textContent:'Salvar auditoria';
+  if(btn){ btn.disabled=true; btn.textContent='Salvando no servidor…'; }
   var statusEl=$('syncStatus');
-  var wasParcial=pendingItems.length>0||pendingMulti.length>0;
-
-  if(filesToUpload.length){
-    if(statusEl) statusEl.textContent='Enviando '+filesToUpload.length+' arquivo(s) para o Drive...';
-    uploadFilesToDrive(uploadAtt, uploadAud, filesToUpload).then(function(results){
-      if(statusEl) statusEl.textContent=results.length>0
-        ? results.length+' arquivo(s) enviado(s) ao Drive.'
-        : 'Falha no envio dos arquivos. Tente novamente.';
-      setTimeout(function(){ if(statusEl) statusEl.textContent=''; },5000);
-    });
-  }
-
-  // Usar setTimeout para deixar o upload iniciar antes do alert bloquear
-  setTimeout(function(){
-    if(wasParcial){
-      alert('Auditoria salva como PARCIALMENTE AUDITADA.\nVoce pode completa-la depois informando o mesmo numero de atendimento.');
-    } else {
-      alert('Auditoria salva com sucesso.');
+  try{
+    var parsed;
+    try{ parsed=await sendToSheets(record); }
+    catch(e){ console.error('❌ Erro ao enviar ao servidor:',e); parsed={status:'error',message:'falha de conexão'}; }
+    if(!parsed||parsed.status!=='ok'){
+      var m=!parsed ? 'O servidor não respondeu.'
+        : parsed.status==='unauthorized' ? 'Sua sessão expirou. Entre novamente e salve de novo.'
+        : parsed.status==='forbidden' ? (parsed.message||'Você não tem permissão para alterar esta auditoria.')
+        : 'Erro: '+(parsed.message||'desconhecido')+'.';
+      alert('⛔ A auditoria NÃO foi salva.\n\n'+m+'\n\nAs respostas continuam no formulário. Clique em "Salvar auditoria" novamente.');
+      return;
     }
-  }, 100);
+    var uploadAtt=record.attendance, uploadAud=record.auditor;
+    clearForm();
+    window.scrollTo({top:0,behavior:'smooth'});
+    if(filesToUpload.length){
+      if(statusEl) statusEl.textContent='Enviando '+filesToUpload.length+' arquivo(s) para o Drive...';
+      uploadFilesToDrive(uploadAtt, uploadAud, filesToUpload).then(function(results){
+        if(statusEl) statusEl.textContent=results.length>0
+          ? results.length+' arquivo(s) enviado(s) ao Drive.'
+          : 'Falha no envio dos arquivos. Tente novamente.';
+        setTimeout(function(){ if(statusEl) statusEl.textContent=''; },5000);
+      });
+    }
+    setTimeout(function(){
+      alert(wasParcial
+        ? 'Auditoria salva no servidor como PARCIALMENTE AUDITADA.\nSomente você poderá finalizá-la: informe o mesmo número de atendimento ou use "Continuar" em Ver meu perfil (de qualquer aparelho).'
+        : 'Auditoria salva com sucesso.');
+    }, 100);
+  } finally {
+    _salvandoAuditoria=false;
+    if(btn){ btn.disabled=false; btn.textContent=btnTxt; }
+  }
 }
 
 /* ═══════════════════════════════════════════════ ENVIO PARA GOOGLE SHEETS */
@@ -4492,7 +4588,7 @@ function attVerifyFail(box,motivo){
 async function checkAttendance(){
   const att=$('attendance').value.trim();
   const box=$('attendanceStatus');
-  existingRecordId=null; lockedItemNums=new Set(); lockedFisico=new Set(); blockedSubmit=false; sheetsDown=false;
+  existingRecordId=null; lockedItemNums=new Set(); lockedFisico=new Set(); blockedSubmit=false; sheetsDown=false; blockedMotivo='';
 
   _dataAuditoriaOriginal=''; dataAuditoriaHoje();   // não apaga uma data escolhida pelo auditor
   if(!att){box.style.display='none';box.innerHTML='';renderForm();return;}
@@ -4511,7 +4607,7 @@ async function checkAttendance(){
     const matches=json.rows.filter(r=>String(r.numero_atendimento||'').trim()===att);
     if(matches.length){
       // Debug: mostrar valores brutos dos primeiros 5 itens
-      const debugRow=matches[matches.length-1];
+      const debugRow=matches[0];
       const debugVals=[];
       for(let _i=1;_i<=5;_i++){
         const _k='item_'+_i;
@@ -4530,8 +4626,8 @@ async function checkAttendance(){
       return;
     }
 
-    // Usa o registro mais recente para este atendimento (caso haja mais de um, por algum motivo)
-    const row=matches[matches.length-1];
+    // Usa a MESMA linha que o servidor (saveAuditoria) atualiza: a PRIMEIRA com este nº
+    const row=matches[0];
     const rec=rowToRecord(row);
     const recTipo=(rec.tipoProntuario||'online').toLowerCase();
     // Escopo por tipo de prontuário:
@@ -4600,12 +4696,12 @@ async function checkAttendance(){
       }
       if(isAdmin()){
         box.innerHTML=`<div class="alert-box" style="background:#EAF2FF;border:1px solid #90BBF5;color:#1a4a8a"><span class="ic">🔓</span><div>
-          <b>Modo administrador</b> — prontuário já auditado completamente por ${rec.auditor||'auditor'}${rec.date?' em '+rec.date:''}.
+          <b>Modo administrador</b> — prontuário já auditado completamente por ${escapeHtml(rec.auditor||'auditor')}${rec.date?' em '+escapeHtml(String(rec.date)):''}.
           <br>Você pode editar e salvar novamente as respostas.
         </div></div>`;
       } else {
         box.innerHTML=`<div class="alert-box alert-blocked"><span class="ic">⛔</span><div>
-          <b>Este prontuário já foi auditado completamente</b> — todos os ${totalItensEscopo} itens respondidos${rec.auditor?', por '+rec.auditor:''}${rec.date?' em '+rec.date:''}.
+          <b>Este prontuário já foi auditado completamente</b> — todos os ${totalItensEscopo} itens respondidos${rec.auditor?', por '+escapeHtml(rec.auditor):''}${rec.date?' em '+escapeHtml(String(rec.date)):''}.
           <br>As respostas estão exibidas abaixo apenas para consulta. Informe outro número para iniciar uma nova auditoria.
         </div></div>`;
       }
@@ -4621,7 +4717,36 @@ async function checkAttendance(){
       return;
     }
 
-    // Auditoria parcial — liberar apenas os itens faltantes
+    // 2026-10-14: auditoria PARCIAL só pode ser finalizada por quem a iniciou (o servidor também recusa).
+    // Outro auditor vê o aviso e os itens marcados, tudo travado, sem poder salvar. Admin mantém a exceção.
+    const donoParcial=String(rec.auditor||'').trim();
+    const souDonoParcial=!!currentUser && !!donoParcial && donoParcial===String(currentUser.name||'').trim();
+    if(!souDonoParcial && !isAdmin()){
+      blockedSubmit=true; blockedMotivo='parcial_outro'; existingRecordId=null;
+      lockedItemNums=new Set(ITEMS.map(i=>i.num));
+      allMultiKeys().forEach(k=>lockedItemNums.add(k));
+      lockedFisico=new Set(ITEMS_FISICO.map(i=>String(i.num)));
+      onlineItemsScope.forEach(i=>{ if(rec.answers[i.num]) current[i.num]=rec.answers[i.num]; });
+      allMultiKeys().forEach(k=>{ if(rec.answers[k]) current[k]=rec.answers[k]; });
+      fisicoItemsScope.forEach(i=>{ if(fa[i.num]) currentFisico[i.num]=fa[i.num]; });
+      tipoProntuario=recTipo; setTipoProntuario(recTipo);
+      box.innerHTML=`<div class="alert-box alert-blocked"><span class="ic">🔒</span><div>
+        <b>Auditoria parcial em andamento${donoParcial?' por '+escapeHtml(donoParcial):''}</b>${rec.date?' (iniciada em '+escapeHtml(String(rec.date))+')':''} — ${totalRespondidos} de ${totalItensEscopo} itens respondidos.
+        <br>Somente ${donoParcial?'<b>'+escapeHtml(donoParcial)+'</b>':'o(a) auditor(a) que a iniciou'} pode finalizá-la. Os itens já marcados aparecem abaixo apenas para consulta; não é possível alterá-los nem salvar.
+        <br>Informe outro número de atendimento para iniciar uma nova auditoria.
+      </div></div>`;
+      dataAuditoriaFixar(rec.date);
+      if(rec.sector) setSetoresFromRecord(rec);
+      if(rec.tipoInt){const t=$('tipoInt');if(t)t.value=rec.tipoInt;}
+      if(rec.diasIntern){const d=$('diasIntern');if(d)d.value=rec.diasIntern;}
+      if(rec.desfecho){const dv=$('desfecho');if(dv)dv.value=rec.desfecho;}
+      renderForm();
+      if(typeof renderMultiForm==='function')renderMultiForm();
+      if(typeof renderFisicoExtra==='function')renderFisicoExtra();
+      return;
+    }
+
+    // Auditoria parcial do PRÓPRIO auditor (ou admin) — liberar apenas os itens faltantes
     existingRecordId=row.id||null;
     lockedItemNums=new Set(answeredNums);
     // Bloquear também as chaves multi já respondidas
@@ -4650,7 +4775,7 @@ async function checkAttendance(){
     });
 
     box.innerHTML=`<div class="alert-box alert-partial"><span class="ic">⚠️</span><div>
-      <b>Este prontuário foi auditado parcialmente</b> — ${totalRespondidos} de ${totalItensEscopo} itens respondidos${rec.auditor?', por '+rec.auditor:''}.
+      <b>Este prontuário foi auditado parcialmente</b> — ${totalRespondidos} de ${totalItensEscopo} itens respondidos${rec.auditor?', por '+escapeHtml(rec.auditor):''}.
       ${allMissingDetails.length?`<br><br>
       <b>${totalMissing} item(ns) pendente(s):</b>
       <ul style="margin:6px 0 0 16px;font-size:12px;line-height:1.7">${allMissingDetails.map(d=>'<li>'+d+'</li>').join('')}</ul>`:''}
@@ -4665,7 +4790,8 @@ async function checkAttendance(){
     if(!$('sector').value&&rec.sector) setSetoresFromRecord(rec);
     if(!$('tipoInt').value&&rec.tipoInt)$('tipoInt').value=rec.tipoInt;
     if(!$('diasIntern').value&&rec.diasIntern)$('diasIntern').value=rec.diasIntern;
-    if(!$('desfecho').value&&rec.desfecho)$('desfecho').value=rec.desfecho;
+    if(!$('desfecho').value&&rec.desfecho){ $('desfecho').value=rec.desfecho; if(typeof onDesfechoChange==='function') onDesfechoChange(rec.desfecho); }
+    if($('observacoes')&&!$('observacoes').value&&row.observacoes) $('observacoes').value=String(row.observacoes);   // continuação não apaga as observações já gravadas
 
     // Aplica tipo de prontuário nos painéis
     tipoProntuario=recTipo;
@@ -4710,25 +4836,13 @@ async function checkAttendance(){
 
 function sendToSheets(record){
   if(!SHEETS_WEBAPP_URL||SHEETS_WEBAPP_URL==='COLE_AQUI_A_URL_DO_SEU_APPS_SCRIPT'){
-    console.warn('SHEETS_WEBAPP_URL não configurada. Configure no início do script.');
-    return;
+    return Promise.resolve({status:'error',message:'servidor não configurado nesta versão'});
   }
   const row=recordToRow(record);
-  apiCall('save', row).then(parsed=>{
-    if(parsed.status==='ok'){
-      console.log('✅ Linha gravada com sucesso na planilha.');
-    }else if(parsed.status==='unauthorized'){
-      console.warn('⚠️ Não autorizado — sessão expirada.');
-      alert('Sua sessão expirou. Faça login novamente para salvar.');
-    }else if(parsed.status==='forbidden'){
-      console.warn('⛔ Recusado pelo servidor:',parsed.message);
-      alert('⛔ '+(parsed.message||'Você não tem permissão para alterar esta auditoria.'));
-    }else{
-      console.warn('⚠️ Resposta inesperada do Apps Script:',parsed);
-      alert('Não foi possível salvar: '+(parsed.message||'erro desconhecido'));
-    }
-  }).catch(err=>{
-    console.error('❌ Erro ao enviar ao Google Sheets:',err);
+  return apiCall('save', row).then(parsed=>{
+    if(parsed&&parsed.status==='ok') console.log('✅ Auditoria gravada no servidor.');
+    else console.warn('⚠️ Servidor recusou/falhou:',parsed);
+    return parsed;
   });
 }
 function wipe(){if(confirm('Excluir TODOS os registros salvos localmente neste navegador?\n\n(Isso não afeta os dados já enviados ao Google Sheets.)')){data=[];persist();alert('Base local limpa.');}}
@@ -4790,9 +4904,9 @@ function updateSyncStatus(){
   const el=$('syncStatus');
   if(!el)return;
   if(!SHEETS_WEBAPP_URL||SHEETS_WEBAPP_URL==='COLE_AQUI_A_URL_DO_SEU_APPS_SCRIPT'){
-    el.innerHTML='⚠️ <b style="color:var(--amber)">Envio ao Google Sheets não configurado.</b> Os dados serão salvos apenas neste dispositivo (local).';
+    el.innerHTML='⚠️ <b style="color:var(--amber)">Envio ao Google Sheets não configurado.</b> Não é possível salvar auditorias nesta versão.';
   }else{
-    el.innerHTML='✅ <b style="color:var(--green)">Conectado ao Google Sheets.</b> Cada auditoria salva é enviada automaticamente ao banco de dados compartilhado.';
+    el.innerHTML='✅ <b style="color:var(--green)">Conectado ao Google Sheets.</b> Cada auditoria é gravada no servidor (nada fica salvo neste aparelho). Auditorias parciais podem ser continuadas de qualquer aparelho, só por quem as iniciou.';
   }
 }
 load();fillSectors();fillAuditores();renderForm();renderMultiForm();renderFisicoExtra();updateSyncStatus();
