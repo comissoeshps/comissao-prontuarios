@@ -762,7 +762,7 @@ tr:hover td{background:#FAFCFF}
         <span class="chip chip-blue">Registro obrigatório</span>
       </div>
       <div class="meta">
-        <div class="field"><label>Data da auditoria</label><input id="auditDate" type="date"></div>
+        <div class="field"><label>Data da auditoria <span title="Preenchida automaticamente pelo relógio do servidor. Ao continuar uma auditoria parcial, vale a data em que ela começou." style="cursor:help;color:var(--muted)">🔒</span></label><input id="auditDate" type="date" readonly tabindex="-1" style="background:var(--soft);color:var(--muted);cursor:not-allowed" title="Preenchida automaticamente — não pode ser alterada"></div>
         <div class="field"><label>Número de atendimento</label><input id="attendance" type="text" placeholder="Ex.: 2025/123456" onblur="checkAttendance()"></div>
         <div class="field"><label>Setor(es) auditado(s)</label><div id="sectorMsel"></div><input type="hidden" id="sector"></div>
         <div class="field"><label>Tipo de internação</label><select id="tipoInt"><option value="">Selecione</option><option>Clínica (eletiva)</option><option>Cirúrgica (eletiva)</option><option>Urgência / Emergência</option><option>Obstétrica</option><option>Pediátrica</option><option>Neonatal</option><option>Não se aplica (pronto-atendimento)</option></select></div>
@@ -1545,7 +1545,7 @@ function membrosAdminRender(){
     });
     h+='</tbody></table></div>';
     if(removidos.length){
-      h+='<details style="margin-top:10px"><summary style="cursor:pointer;font-size:12.5px;font-weight:700;color:var(--muted)">Removidos ('+removidos.length+')</summary>'
+      h+='<details open style="margin-top:12px;border:1px solid var(--line);border-radius:10px;padding:8px 12px"><summary style="cursor:pointer;font-size:13px;font-weight:800;color:var(--navy)">🗂️ Removidos ('+removidos.length+') — restaurar ou excluir definitivamente</summary>'
         +'<div style="font-size:11.5px;color:var(--muted);margin:6px 0">Sem acesso e fora de todas as listas. As auditorias feitas por eles continuam na planilha.</div>'
         +removidos.sort().map(function(l){ return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-top:1px dashed var(--line)"><span>'+mEsc(db[l].nome||l)+' <span style="font-family:\'DM Mono\',monospace;font-size:11.5px;color:var(--muted)">('+mEsc(l)+')</span></span>'
           +'<span style="white-space:nowrap"><button class="secondary" style="padding:5px 10px" data-login="'+mEsc(l)+'" onclick="membroRestaurar(this.dataset.login)">Restaurar</button> '
@@ -1741,6 +1741,51 @@ async function membroRestaurar(login){
     await membrosAposGravar('✔ '+(m.nome||login)+' restaurado(a).');
   }catch(e){ mMsg('Erro ao restaurar: '+(mIsPermDenied(e)?'permissão negada':(e.message||e)),false); }
 }
+
+
+/* === DATA DA AUDITORIA: relógio do servidor (2026-10-14) ==========================
+   • O campo é travado (readonly). A data vem do relógio do servidor do Firebase
+     (.info/serverTimeOffset), não do relógio do aparelho — que pode estar errado ou ser alterado.
+   • Nova auditoria: data/hora do momento em que é iniciada/salva.
+   • Continuação de auditoria parcial: mantém a data ORIGINAL (de quando começou).
+   • O Apps Script (V10) impõe a mesma regra no servidor: na inserção grava a hora dele;
+     na atualização nunca altera data_auditoria. O que o navegador mandar é ignorado. */
+var _relogioOffset=null, _dataAuditoriaOriginal='';
+async function relogioSincronizar(){
+  try{
+    initFirebase();
+    if(fbDB){ var sn=await fbDB.ref('.info/serverTimeOffset').once('value'); var v=Number(sn.val()); if(isFinite(v)) _relogioOffset=v; }
+  }catch(e){ console.warn('[relógio] usando o do aparelho:', e && e.message); }
+  return _relogioOffset;
+}
+function relogioAgora(){ return Date.now()+(_relogioOffset||0); }
+function fmtSaoPaulo(ms, comHora){
+  var p={}; new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false})
+    .formatToParts(new Date(ms)).forEach(function(x){ p[x.type]=x.value; });
+  var hh=(p.hour==='24'?'00':p.hour);
+  return p.year+'-'+p.month+'-'+p.day+(comHora?(' '+hh+':'+p.minute):'');
+}
+/* Converte o valor guardado na planilha (AAAA-MM-DD[ hh:mm], ISO, ou DD/MM/AAAA) para o campo date. */
+function dataParaInput(v){
+  var s=String(v==null?'':v).trim(); if(!s) return '';
+  var m=/^(\d{4})-(\d{2})-(\d{2})(?!T)/.exec(s); if(m) return m[1]+'-'+m[2]+'-'+m[3];
+  m=/^(\d{2})\/(\d{2})\/(\d{4})/.exec(s); if(m) return m[3]+'-'+m[2]+'-'+m[1];
+  var d=new Date(s); if(!isNaN(d.getTime())) return fmtSaoPaulo(d.getTime(), false);
+  return '';
+}
+async function dataAuditoriaHoje(){
+  var el=document.getElementById('auditDate'); if(!el) return;
+  el.value=fmtSaoPaulo(relogioAgora(), false);          // imediato (offset já sincronizado ou 0)
+  await relogioSincronizar();
+  if(!_dataAuditoriaOriginal) el.value=fmtSaoPaulo(relogioAgora(), false);
+}
+function dataAuditoriaFixar(original){
+  _dataAuditoriaOriginal=String(original||'');
+  var el=document.getElementById('auditDate'); if(!el) return;
+  var v=dataParaInput(original);
+  if(v) el.value=v;
+}
+try{ relogioSincronizar(); }catch(e){}
 
 /* === LOGIN COM GOOGLE + CONVITES (2026-10-13) ===================================
    • Conta clássica (login@comissaohps.local) pode VINCULAR o Google no perfil → mesma conta, mesmo uid.
@@ -4019,14 +4064,8 @@ function clearForm(){
   // Limpar campos — auditor NÃO é resetado (fica sempre o do login)
   ['attendance','diasIntern'].forEach(id=>{const el=$(id);if(el)el.value=''});
   // Preencher data de hoje em horário de Brasília
-  const dateEl=$('auditDate');
-  if(dateEl){
-    const today=new Date(new Date().toLocaleString('en-US',{timeZone:'America/Sao_Paulo'}));
-    const yyyy=today.getFullYear();
-    const mm=String(today.getMonth()+1).padStart(2,'0');
-    const dd=String(today.getDate()).padStart(2,'0');
-    dateEl.value=yyyy+'-'+mm+'-'+dd;
-  }
+  _dataAuditoriaOriginal='';
+  dataAuditoriaHoje();
   ['sector','tipoInt','desfecho'].forEach(id=>{const el=$(id);if(el)el.value=''});
   selSetores=[]; setorItens={}; renderSectorMsel(); renderSectorItemsPanel();
   onDesfechoChange(''); // resetar campo dias de internação
@@ -4124,15 +4163,7 @@ function save(){
 
   var record={
     id:existingRecordId||Date.now(),
-    date:(function(){
-      const now=new Date(new Date().toLocaleString('en-US',{timeZone:'America/Sao_Paulo'}));
-      const dd=String(now.getDate()).padStart(2,'0');
-      const mm=String(now.getMonth()+1).padStart(2,'0');
-      const yyyy=now.getFullYear();
-      const hh=String(now.getHours()).padStart(2,'0');
-      const min=String(now.getMinutes()).padStart(2,'0');
-      return yyyy+'-'+mm+'-'+dd+' '+hh+':'+min;
-    })(),
+    date:_dataAuditoriaOriginal ? _dataAuditoriaOriginal : fmtSaoPaulo(relogioAgora(), true),   // continuação mantém a data original
     attendance:$('attendance').value.trim(),
     sector:$('sector').value,
     tipoInt:$('tipoInt').value,
@@ -4433,6 +4464,7 @@ async function checkAttendance(){
   const box=$('attendanceStatus');
   existingRecordId=null; lockedItemNums=new Set(); lockedFisico=new Set(); blockedSubmit=false; sheetsDown=false;
 
+  _dataAuditoriaOriginal=''; dataAuditoriaHoje();
   if(!att){box.style.display='none';box.innerHTML='';renderForm();return;}
 
   if(!SHEETS_WEBAPP_URL||SHEETS_WEBAPP_URL==='COLE_AQUI_A_URL_DO_SEU_APPS_SCRIPT'){
@@ -4548,7 +4580,7 @@ async function checkAttendance(){
         </div></div>`;
       }
       // Preencher campos de identificação com dados do prontuário existente
-      if(rec.date)$('auditDate').value=rec.date;
+      dataAuditoriaFixar(rec.date);
       if(rec.sector) setSetoresFromRecord(rec);
       if(rec.tipoInt){const t=$('tipoInt');if(t)t.value=rec.tipoInt;}
       if(rec.diasIntern){const d=$('diasIntern');if(d)d.value=rec.diasIntern;}
@@ -4599,7 +4631,7 @@ async function checkAttendance(){
     </div></div>`;
 
     // Pré-carrega dados de identificação
-    if(!$('auditDate').value&&rec.date)$('auditDate').value=rec.date;
+    dataAuditoriaFixar(rec.date);   // continuação: vale a data em que a auditoria começou
     if(!$('sector').value&&rec.sector) setSetoresFromRecord(rec);
     if(!$('tipoInt').value&&rec.tipoInt)$('tipoInt').value=rec.tipoInt;
     if(!$('diasIntern').value&&rec.diasIntern)$('diasIntern').value=rec.diasIntern;
