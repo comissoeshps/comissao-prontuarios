@@ -619,6 +619,15 @@ body.dark #hps-tour-hl.hps-tour-semalvo,body.dark #hps-tour-hl.hps-tour-iris{box
   #chatWinHeader button{width:38px!important;height:38px!important}
   #chatConvArea button{min-width:40px;min-height:40px}
 }
+
+/* === CABEÇALHO RECOLHÍVEL NO CELULAR (2026-10-15, parte 28) — rolar para baixo esconde a faixa do logo
+   (as abas continuam fixas no topo); rolar para cima mostra de novo. Só transform: nada muda de lugar na página. */
+@media(max-width:760px){
+  html{scroll-padding-top:60px}
+  .hero{transition:transform .26s cubic-bezier(.23,1,.32,1),box-shadow .26s ease;will-change:transform}
+  .hero.hero-recolhido{transform:translateY(var(--hero-recolhe,0px));box-shadow:0 2px 14px rgba(12,32,58,.12)}
+}
+@media(max-width:760px) and (prefers-reduced-motion:reduce){ .hero{transition:none} }
 </style>
 </head>
 <body>
@@ -7724,6 +7733,7 @@ function tourAuditoriaIniciar(){
   try{ requestColeta(document.getElementById('tab-coleta')); }catch(e){}
   try{ var ae=document.activeElement; if(ae&&ae.blur&&ae!==document.body) ae.blur(); }catch(e){}
   tourAuditoriaMarcarVisto();
+  try{ if(typeof hpsCabecalhoExpandir==='function') hpsCabecalhoExpandir(); }catch(e){}
   _hpsTourPassos=_tourAuditoriaPassos(); _hpsTourIdx=0; _hpsTourAtivo=true; _hpsTourProgPrev=0;
   _hpsTourEls();
   try{ document.addEventListener('keydown',_hpsTourTecla,true); }catch(e){}
@@ -7788,6 +7798,40 @@ function _mobAbaAtivaVisivel(){
       var c=f.querySelector('input:not([type=hidden]):not([readonly]):not([disabled]),select:not([disabled]),textarea:not([readonly])');
       if(c){ try{ c.focus(); }catch(e){} }
     });
+  }catch(e){}
+})();
+
+
+/* === CABEÇALHO RECOLHÍVEL NO CELULAR (2026-10-15, parte 28) ===
+   Até 760 px: ao rolar para BAIXO, a faixa do logo/título sobe e some (as abas ficam presas no topo);
+   ao rolar para CIMA ou voltar ao topo, ela reaparece. Pequenos movimentos (<8 px) são ignorados para não
+   "piscar". Durante o tour guiado o cabeçalho fica sempre aberto (o tour mede a altura dele). */
+(function(){
+  try{
+    var hero=document.querySelector('.hero'), tabs=hero&&hero.querySelector('.tabs');
+    if(!hero||!tabs) return;
+    var mq=window.matchMedia?window.matchMedia('(max-width:760px)'):null;
+    var ultimoY=window.scrollY||0, recolhido=false, raf=0;
+    var rafFn=window.requestAnimationFrame?function(f){ return requestAnimationFrame(f); }:function(f){ return setTimeout(f,16); };
+    function aplicar(r){
+      if(r===recolhido) return;
+      recolhido=r;
+      if(r) hero.style.setProperty('--hero-recolhe',(-tabs.offsetTop)+'px');
+      hero.classList.toggle('hero-recolhido',r);
+    }
+    function tick(){
+      raf=0;
+      var y=window.scrollY||0;
+      var tour=(typeof _hpsTourAtivo!=='undefined' && _hpsTourAtivo);
+      if(!mq||!mq.matches||tour){ aplicar(false); ultimoY=y; return; }
+      if(y<=tabs.offsetTop+24){ aplicar(false); ultimoY=y; return; }
+      var dy=y-ultimoY;
+      if(Math.abs(dy)<8) return;
+      aplicar(dy>0); ultimoY=y;
+    }
+    window.addEventListener('scroll',function(){ if(!raf) raf=rafFn(tick); },{passive:true});
+    if(mq){ var mudou=function(){ aplicar(false); }; if(mq.addEventListener) mq.addEventListener('change',mudou); else if(mq.addListener) mq.addListener(mudou); }
+    window.hpsCabecalhoExpandir=function(){ ultimoY=window.scrollY||0; aplicar(false); };
   }catch(e){}
 })();
 
