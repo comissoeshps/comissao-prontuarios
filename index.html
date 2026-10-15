@@ -505,6 +505,120 @@ body.dark .att-badge.pend{color:#F2C14E}
   .dsh-manual .fld small{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
   .dsh-manual input,.dsh-manual select{border:1px solid var(--border);border-radius:9px;padding:7px 10px;font-size:12.5px;background:var(--panel);color:var(--text);font-family:inherit}
 
+/* === TOUR GUIADO DA AUDITORIA (2026-10-15, parte 26) — motor da Navegação Guiada da CapiClinic,
+   com as cores e a tipografia da Comissão. O recorte claro é o box-shadow gigante do #hps-tour-hl. */
+#hps-tour-blocker{position:fixed;inset:0;z-index:10055;background:transparent}
+#hps-tour-hl{position:fixed;top:0;left:0;z-index:10056;pointer-events:none;border-radius:14px;box-shadow:0 0 0 2px rgba(255,255,255,.92),0 0 0 9999px rgba(11,31,58,.5);transition:transform .44s cubic-bezier(.77,0,.175,1),width .44s cubic-bezier(.77,0,.175,1),height .44s cubic-bezier(.77,0,.175,1),opacity .22s ease-out}
+#hps-tour-hl.hps-tour-semalvo{transform:translate3d(50vw,50vh,0)!important;width:0!important;height:0!important;box-shadow:0 0 0 0 rgba(255,255,255,0),0 0 0 9999px rgba(11,31,58,.5);border-radius:0}
+#hps-tour-hl.hps-tour-esconde{opacity:0;transition:opacity .16s ease-out}
+#hps-tour-hl.hps-tour-segue{transition:opacity .22s ease-out}
+#hps-tour-hl.hps-tour-viaja{transition:transform .45s cubic-bezier(.77,0,.175,1),width .45s cubic-bezier(.77,0,.175,1),height .45s cubic-bezier(.77,0,.175,1)}
+#hps-tour-hl.hps-tour-iris{box-shadow:0 0 0 0 rgba(255,255,255,0),0 0 0 9999px rgba(11,31,58,.5)}
+#hps-tour-hl.hps-tour-iris-sai{transition:transform .2s ease-out,width .2s ease-out,height .2s ease-out,box-shadow .2s ease-out}
+#hps-tour-hl.hps-tour-abre{transition:transform .32s ease-out,width .32s ease-out,height .32s ease-out,box-shadow .32s ease-out,opacity .22s ease-out}
+#hps-tour-hl.hps-tour-sem-trans{transition:none!important}
+#hps-tour-hl::after{content:'';position:absolute;inset:-4px;border-radius:inherit;box-shadow:0 0 0 3px rgba(31,111,235,.55);opacity:0;pointer-events:none}
+#hps-tour-hl.hps-tour-chega::after{animation:hpsTourPulse .9s ease-out .4s 1 both}
+#hps-tour-hl.hps-tour-semalvo::after,#hps-tour-hl.hps-tour-esconde::after,#hps-tour-hl.hps-tour-iris::after{display:none}
+@keyframes hpsTourPulse{0%{opacity:0;transform:scale(1)}30%{opacity:1}100%{opacity:0;transform:scale(1.04)}}
+#hps-tour-pop{position:fixed;z-index:10057;background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:0 12px 32px rgba(12,32,58,.2),0 2px 6px rgba(12,32,58,.06);max-width:390px;width:calc(100vw - 32px);padding:16px 20px 14px;font-family:'DM Sans',sans-serif;color:var(--ink);transition:opacity .2s ease-out}
+#hps-tour-pop.hps-tour-esconde{opacity:0;pointer-events:none;transition:opacity .14s ease-out}
+#hps-tour-pop .hps-tour-prog{height:3px;background:var(--soft);border-radius:999px;overflow:hidden;margin:0 0 12px}
+#hps-tour-pop .hps-tour-prog span{display:block;height:100%;width:100%;border-radius:999px;background:linear-gradient(90deg,var(--blue),var(--cyan));transform-origin:left center;transform:scaleX(0);transition:transform .32s ease-out}
+#hps-tour-pop .hps-tour-t{font-size:16px;font-weight:900;color:var(--navy);display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px;line-height:1.3}
+#hps-tour-pop .hps-tour-n{font-size:11px;font-weight:800;color:var(--muted);background:var(--soft);border:1px solid var(--line);border-radius:999px;padding:2px 9px;flex-shrink:0;margin-top:1px}
+#hps-tour-pop .hps-tour-x{font-size:13.5px;color:var(--ink);line-height:1.6}
+#hps-tour-pop .hps-tour-x b{color:var(--navy)}
+#hps-tour-pop .hps-tour-rolar{font-size:12px;font-weight:700;color:var(--blue);background:var(--soft);border-radius:8px;padding:6px 10px;margin-top:10px}
+#hps-tour-pop .hps-tour-f{display:flex;align-items:center;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+#hps-tour-pop .hps-tour-fechar{background:none;border:none;color:var(--muted);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;padding:8px 4px;margin-right:auto}
+#hps-tour-pop .hps-tour-btn{border:none;border-radius:10px;padding:9px 16px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;transition:transform .12s ease-out}
+#hps-tour-pop .hps-tour-btn:active,#hps-tour-pop .hps-tour-fechar:active{transform:scale(.97)}
+#hps-tour-pop .hps-tour-ant{background:var(--soft);color:var(--navy);border:1px solid var(--line)}
+#hps-tour-pop .hps-tour-prox{background:linear-gradient(135deg,var(--blue),#1455C0);color:#fff;box-shadow:0 4px 14px rgba(31,111,235,.3)}
+#hps-tour-pop button:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.hps-tour-pop-in{animation:hpsTourPopIn .26s ease-out backwards}
+@keyframes hpsTourPopIn{from{opacity:0;transform:translate(var(--pop-dx,0px),var(--pop-dy,6px)) scale(.97)}to{opacity:1;transform:none}}
+#hps-tour-drag{position:fixed;z-index:10056;pointer-events:none;display:none;align-items:center;justify-content:center;border-radius:14px;background:rgba(11,31,58,.3);transition:opacity .35s ease}
+#hps-tour-drag.hps-tour-dica-off,#hps-tour-drag.hps-tour-esconde{opacity:0}
+#hps-tour-drag .hps-tour-dica{display:flex;align-items:center;gap:9px;background:rgba(255,255,255,.97);color:#0B1F3A;font-weight:800;font-size:13.5px;padding:11px 18px;border-radius:999px;box-shadow:0 10px 30px rgba(11,31,58,.4);font-family:'DM Sans',sans-serif}
+#hps-tour-drag .hps-tour-dica .ar{font-size:18px;line-height:1;animation:hpsTourDica 1.7s ease-in-out infinite}
+@keyframes hpsTourDica{0%,100%{transform:translateY(-3px)}50%{transform:translateY(3px)}}
+.hps-tour-fechando{opacity:0!important;pointer-events:none!important;transition:opacity .22s ease-out!important}
+#hps-tour-fim{position:fixed;inset:0;z-index:10058;display:flex;align-items:center;justify-content:center;pointer-events:none;transition:opacity .26s ease-out}
+#hps-tour-fim.off{opacity:0}
+#hps-tour-fim .hps-tour-fim-card{display:flex;flex-direction:column;align-items:center;gap:6px;background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:0 18px 50px rgba(12,32,58,.28);padding:22px 30px;font-family:'DM Sans',sans-serif;text-align:center;animation:hpsTourPopIn .3s ease-out}
+#hps-tour-fim .chk{width:44px;height:44px;border-radius:50%;background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:900}
+#hps-tour-fim .t{font-size:15px;font-weight:900;color:var(--navy)}
+#hps-tour-fim .s{font-size:12px;color:var(--muted)}
+body.dark #hps-tour-hl{box-shadow:0 0 0 2px rgba(255,255,255,.75),0 0 0 9999px rgba(0,0,0,.6)}
+body.dark #hps-tour-hl.hps-tour-semalvo,body.dark #hps-tour-hl.hps-tour-iris{box-shadow:0 0 0 0 rgba(255,255,255,0),0 0 0 9999px rgba(0,0,0,.6)}
+@media (max-width:599px){#hps-tour-pop .hps-tour-x{max-height:34vh;overflow-y:auto;overscroll-behavior:contain}}
+@media (prefers-reduced-motion:reduce){
+  #hps-tour-hl,#hps-tour-hl.hps-tour-segue,#hps-tour-hl.hps-tour-abre,#hps-tour-hl.hps-tour-iris-sai,#hps-tour-hl.hps-tour-viaja{transition:opacity .15s ease!important}
+  #hps-tour-hl.hps-tour-chega::after,#hps-tour-drag .hps-tour-dica .ar{animation:none!important}
+  .hps-tour-pop-in{animation:none!important}
+  #hps-tour-pop .hps-tour-prog span{transition:none!important}
+}
+/* Botão e oferta do tour na tela "Iniciar Auditoria" */
+.tour-btn{border:1.5px solid var(--blue);background:var(--card);border-radius:10px;padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;color:var(--blue);font-family:'DM Sans',sans-serif}
+.tour-btn:hover{background:var(--soft)}
+#tourOferta{background:var(--card);border:1.5px solid var(--blue);border-radius:16px;padding:14px 18px;margin:16px 0 0;box-shadow:var(--shadow)}
+#tourOferta .to-t{font-size:14px;font-weight:900;color:var(--navy)}
+#tourOferta .to-s{font-size:12.5px;color:var(--muted);margin-top:3px;line-height:1.5}
+#tourOferta .to-a{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+
+/* === LAYOUT MOBILE (2026-10-15, parte 27) — auditoria de layout no celular (375/360 px) ===
+   Só aparência e alvos de toque; nenhuma regra de dados mudou. */
+.sec-msel .pop label{text-transform:none;letter-spacing:0;font-weight:600;margin-bottom:0}   /* opções do setor herdavam o rótulo do campo (MAIÚSCULAS em negrito) */
+@media(max-width:760px){
+  .logo-area{padding-right:52px}
+  .logo-img img{height:26px}
+  #themeToggle{position:absolute!important;top:10px!important;right:12px!important;z-index:101!important;width:40px;height:40px}
+  .tabs{scroll-snap-type:x proximity;scrollbar-width:none}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{scroll-snap-align:start}
+  .tabs.tabs-dir{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 40px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 40px),transparent)}
+  .tabs.tabs-esq{-webkit-mask-image:linear-gradient(90deg,transparent,#000 40px);mask-image:linear-gradient(90deg,transparent,#000 40px)}
+  .tabs.tabs-esq.tabs-dir{-webkit-mask-image:linear-gradient(90deg,transparent,#000 40px,#000 calc(100% - 40px),transparent);mask-image:linear-gradient(90deg,transparent,#000 40px,#000 calc(100% - 40px),transparent)}
+  main{padding-bottom:96px}
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),select,textarea{font-size:16px!important}
+  .field label{font-size:11.5px}
+  .field input:not([type=checkbox]):not([type=radio]),.field select{min-height:34px}
+  .domain{font-size:11px}
+  .role-card .role-title,.members-card .role-title{font-size:11.5px}
+  .item{padding:12px}
+  .choices{gap:8px}
+  .choice{flex:1 1 auto;min-height:44px;font-size:13.5px;padding:8px 12px;border-radius:12px}
+  .tipo-btn{flex:1 1 0;min-width:0;min-height:46px;padding:8px 6px;font-size:12.5px;line-height:1.25}
+  .subtab{min-height:40px;padding:9px 16px}
+  button.primary,button.secondary{min-height:44px}
+  .tour-btn,#btnVerPerfilColeta{min-height:40px}
+  .login-field input{padding:12px 14px;min-height:48px}
+  .pw-eye{min-width:44px;min-height:44px;right:2px;display:flex;align-items:center;justify-content:center}
+  .sec-msel .pop label{min-height:44px;font-size:14px}
+  .sec-msel .pop input{width:20px;height:20px}
+  .stat-grid{grid-template-columns:repeat(3,1fr)!important;gap:8px}
+  .stat-card{padding:10px 6px}
+  .stat-num{font-size:22px}
+  .equipe-block{padding:12px}
+  .sub-item{padding:10px}
+  .logo-img img{height:24px}
+  .logo-area{gap:8px}
+  .hero-title p{font-size:11px!important;line-height:1.3}
+  .sec-msel>button{min-height:34px}
+  .welcome-card button,#login button,#membrosAdminBtn{min-height:40px}
+  .profile-tab-btn{min-height:44px}
+  button[onclick="showForgotInfo()"]{padding:12px 8px}
+  #chatConvList>div:not([id]){font-size:11px!important}
+}
+@media(max-width:600px){
+  #chatWindow:not(.minimized){left:8px!important;right:8px!important;top:auto!important;bottom:8px!important;width:auto!important;height:min(78vh,560px)!important;min-width:0!important}
+  #chatWindow.minimized{left:8px!important;right:8px!important;top:auto!important;bottom:8px!important;width:auto!important;min-width:0!important}
+  #chatWinHeader{cursor:default!important}
+  #chatWinHeader button{width:38px!important;height:38px!important}
+  #chatConvArea button{min-width:40px;min-height:40px}
+}
 </style>
 </head>
 <body>
@@ -765,8 +879,22 @@ body.dark .att-badge.pend{color:#F2C14E}
             <div id="headerRole" style="font-size:11px;color:var(--muted);margin-top:1px">Membro — Comissão de Revisão de Prontuários</div>
           </div>
         </div>
-        <button onclick="show('login',null);buildProfilePage()" style="border:1.5px solid var(--line);background:#fff;border-radius:10px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;color:var(--navy);font-family:'DM Sans',sans-serif">Ver meu perfil</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button type="button" id="btnTourAuditoria" class="tour-btn" onclick="tourAuditoriaIniciar()" title="Tour guiado: como fazer uma auditoria">🧭 Tour guiado</button>
+          <button id="btnVerPerfilColeta" onclick="show('login',null);buildProfilePage()" style="border:1.5px solid var(--line);background:#fff;border-radius:10px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;color:var(--navy);font-family:'DM Sans',sans-serif">Ver meu perfil</button>
+        </div>
       </div>
+    </div>
+
+    <!-- Oferta do tour guiado no 1º acesso (some depois de Começar ou Agora não — perfis/<login>/tourAuditoriaVisto) -->
+    <div id="tourOferta" style="display:none" role="region" aria-label="Tour guiado">
+      <div class="to-t">🧭 Primeira auditoria por aqui?</div>
+      <div class="to-s">Um tour rápido (16 etapas, cerca de 2 minutos) mostra como preencher e salvar uma auditoria. Durante o tour nada é preenchido nem salvo.</div>
+      <div class="to-a">
+        <button type="button" class="primary" style="padding:8px 14px" onclick="tourAuditoriaIniciar()">Começar o tour</button>
+        <button type="button" class="secondary" style="padding:8px 14px" onclick="tourAuditoriaMarcarVisto()">Agora não</button>
+      </div>
+      <div class="to-s" style="margin-top:8px">Você pode abrir o tour depois pelo botão <b>🧭 Tour guiado</b>, no alto desta página.</div>
     </div>
 
     <div class="panel">
@@ -1068,6 +1196,29 @@ body.dark .att-badge.pend{color:#F2C14E}
   Dúvidas ou problemas: entre em contato com o administrador da plataforma.
 </footer>
 
+<!-- 2026-10-15: ROTA ANTECIPADA DO CONVITE. Roda ANTES das bibliotecas externas (que bloqueiam a página
+     em rede lenta). Só troca o que aparece na tela; o convite é guardado e validado pelo script principal
+     (conviteDaUrl/conviteRotear), que também reabilita os botões quando estiver pronto. -->
+<script>
+(function(){
+  try{
+    if(!/[?&]convite=[A-Za-z0-9_-]{24,64}/.test(location.search)) return;
+    try{ if(sessionStorage.getItem('hps_user')) return; }catch(e){}
+    document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
+    var col=document.getElementById('coleta'); if(col) col.classList.add('active');
+    document.querySelectorAll('.tabs .tab').forEach(function(t){ t.classList.remove('active'); });
+    var tc=document.getElementById('tab-coleta'); if(tc) tc.classList.add('active');
+    var lp=document.getElementById('loginPanel'); if(lp) lp.style.display='block';
+    var cf=document.getElementById('coletaForm'); if(cf) cf.style.display='none';
+    var ls=document.getElementById('loginScreen'); if(ls) ls.style.display='none';
+    var cs=document.getElementById('conviteScreen'); if(cs) cs.style.display='block';
+    var t=document.getElementById('loginPanelTitle'); if(t) t.textContent='Convite para a Comissão';
+    var st=document.getElementById('loginPanelSub'); if(st) st.textContent='Confirme seus dados para entrar';
+    var sel=document.getElementById('cvtSetor'); if(sel && !sel.options.length) sel.innerHTML='<option value="">Carregando setores…</option>';
+    var bg=document.getElementById('btnGoogleConvite'); if(bg){ bg.disabled=true; bg.style.opacity='.6'; bg.setAttribute('data-carregando','1'); }
+  }catch(e){}
+})();
+</script>
 
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
 <script src="https://www.google.com/recaptcha/api.js?render=6Lf3GUAtAAAAF2Cvs_LkZKIF0MK9zs9sFTtYDqf"></script>
@@ -1848,7 +1999,7 @@ function conviteAvisoRender(){
   if(modo){
     ['firstAccessScreen','forgotScreen','resetScreen'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display='none'; });
     ls.style.display='none'; cs.style.display='block';
-    var sel=document.getElementById('cvtSetor'); if(sel && !sel.options.length) sel.innerHTML=setorOpcoesHtml('');
+    var sel=document.getElementById('cvtSetor'); if(sel && (!sel.options.length || (sel.options.length===1 && !sel.options[0].value))) sel.innerHTML=setorOpcoesHtml('');
     var t=document.getElementById('loginPanelTitle'); if(t) t.textContent='Convite para a Comissão';
     var st=document.getElementById('loginPanelSub'); if(st) st.textContent='Confirme seus dados para entrar';
   } else if(cs.style.display==='block'){
@@ -2224,13 +2375,35 @@ async function conviteCancelar(code){
 }
 try{ conviteDaUrl(); }catch(e){}
 document.addEventListener('DOMContentLoaded',function(){ try{ conviteAvisoRender(); }catch(e){} });
-window.addEventListener('load',function(){
-  try{
-    var c=sessionStorage.getItem(CONVITE_KEY)||'';
-    if(c && !currentUser){ var t=document.getElementById('tab-coleta'); if(t) requestColeta(t); }
-    conviteAvisoRender();
-  }catch(e){}
-});
+/* 2026-10-15: o link de convite abre DIRETO a tela do convite.
+   Antes: só no evento 'load' (espera todos os scripts externos; em rede lenta o convidado via a
+   Página Inicial) e, com alguém já conectado no navegador, nada acontecia (convite ficava guardado
+   em silêncio e reaparecia ao sair). Agora: rota imediata no fim do script + pergunta explícita
+   quando há sessão aberta. */
+var _conviteSessaoPerguntada=false;
+function conviteRotear(){
+  try{ var bg=document.getElementById('btnGoogleConvite'); if(bg && bg.getAttribute('data-carregando')){ bg.disabled=false; bg.style.opacity=''; bg.removeAttribute('data-carregando'); } }catch(e){}
+  var c=''; try{ c=sessionStorage.getItem(CONVITE_KEY)||''; }catch(e){}
+  if(!c) return false;
+  var t=document.getElementById('tab-coleta');
+  if(currentUser){
+    if(_conviteSessaoPerguntada || document.readyState!=='complete') return true; // decide no 'load' (DOM completo)
+    _conviteSessaoPerguntada=true;
+    var nome=String(currentUser.name||currentUser.login||'outra pessoa');
+    var sair=confirm('Você abriu um LINK DE CONVITE, mas este navegador está conectado como '+nome+'.\n\n'
+      +'O convite é para quem ainda NÃO tem cadastro na plataforma.\n\n'
+      +'OK = sair desta conta e abrir a tela do convite\n'
+      +'Cancelar = continuar conectado(a) e descartar o convite neste navegador');
+    if(sair){ logout(); if(t) requestColeta(t); conviteAvisoRender(); try{ window.scrollTo(0,0); }catch(e){} }
+    else { try{ sessionStorage.removeItem(CONVITE_KEY); }catch(e){} conviteAvisoRender(); }
+    return true;
+  }
+  if(t) requestColeta(t);
+  conviteAvisoRender();
+  try{ window.scrollTo(0,0); }catch(e){}
+  return true;
+}
+window.addEventListener('load',function(){ try{ conviteRotear(); }catch(e){} });
 
 /* === VISIBILIDADE DE ABAS PARA AUDITORES (2026-10-12) =========================
    Firebase: config_plataforma/resultados_auditores (bool). Leitura: autorizados; escrita: só owner.
@@ -2728,9 +2901,11 @@ async function afterLogin(){
   listenChat();
   try{ renderRegimento(); }catch(e){}
   try{ setorPedirSeVazio(); }catch(e){}
+  try{ var _cfT=document.getElementById('coletaForm'); if(_cfT && _cfT.style.display==='block') tourAuditoriaOfertaChecar(); }catch(e){}
 }
 
 function logout(){
+  try{ if(typeof _hpsTourFechar==='function') _hpsTourFechar(); var _toL=document.getElementById('tourOferta'); if(_toL) _toL.style.display='none'; }catch(e){}
   if(fbDB&&currentUser){
     fbDB.ref('online/'+currentUser.login).remove();
   }
@@ -3823,6 +3998,7 @@ function show(id,btn){
   }
   // Atualizar boas-vindas quando navegar para 'sobre'
   if(id==='sobre' && currentUser) setTimeout(updateSobreWelcome, 50);
+  try{ if(typeof _mobAbaAtivaVisivel==='function') _mobAbaAtivaVisivel(); }catch(e){}   // parte 27: aba ativa visível no celular
 }
 /* Aba "Página Inicial": alterna entre as sub-abas "Sobre a Comissão" e "Sobre a plataforma" */
 function showInicio(which, btn){
@@ -4145,6 +4321,7 @@ function requestColeta(btn){
   if(currentUser){
     var lp=document.getElementById('loginPanel'); if(lp) lp.style.display='none';
     var cf=document.getElementById('coletaForm'); if(cf) cf.style.display='block';
+    try{ if(typeof tourAuditoriaOfertaChecar==='function' && !_hpsTourAtivo) tourAuditoriaOfertaChecar(); }catch(e){}
   } else {
     var lp=document.getElementById('loginPanel'); if(lp) lp.style.display='block';
     var cf=document.getElementById('coletaForm'); if(cf) cf.style.display='none';
@@ -7185,8 +7362,438 @@ function dashExport(){
   try{ var blob=new Blob(['\uFEFF'+lines.join('\n')],{type:'text/csv;charset=utf-8'}); var url=URL.createObjectURL(blob); var a=document.createElement('a'); a.href=url; a.download='internacoes.csv'; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(function(){ URL.revokeObjectURL(url); },1500); }catch(e){}
 }
 
-// Página inicial: sobre
+/* === TOUR GUIADO DA AUDITORIA (2026-10-15, parte 26) =====================================
+   Motor portado da Navegação Guiada da CapiClinic (common.js: tour1 → tourfica1/tourfluxo1),
+   com o layout da Comissão. Mantido do motor original: véu com recorte que fecha/abre em íris,
+   balão anticolisão (abaixo → acima → direita → esquerda → posição que menos cobre o alvo),
+   balão que FICA e desliza entre passos, passo "rolável" com arraste/roda, teclado (Esc fecha,
+   ← → trocam de passo, Tab preso no balão), barra de progresso, cartão de conclusão,
+   movimento reduzido. Removido: câmera/zoom, mascote, troca de telas, trilhas da CapiClinic.
+   SEGURANÇA: durante o tour um bloqueador cobre a página inteira — nenhum clique, toque ou
+   tecla chega ao formulário. O tour NUNCA preenche, altera, consulta a planilha ou salva
+   auditoria. Único dado gravado: perfis/<login>/tourAuditoriaVisto (true), para não oferecer
+   o tour de novo — regra já existente (o próprio membro grava o seu perfil). */
+var _hpsTourPassos=[], _hpsTourIdx=0, _hpsTourAtivo=false, _hpsTourSeq=0, _hpsTourAlvoEl=null;
+var _hpsTourRolavel=false, _hpsTourDragY=null, _hpsTourTouchY=null, _hpsTourDicaSumiu=false, _hpsTourProgPrev=0, _hpsTourScrollRaf=0, _hpsTourReflowT=0;
+var _hpsTourRaf=(typeof requestAnimationFrame==='function')?function(f){ return requestAnimationFrame(f); }:function(f){ return setTimeout(f,16); };
+function _hpsTourReduzido(){ try{ return !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); }catch(e){ return false; } }
+function _hpsTourEstreito(){ return (window.innerWidth||0) < 600; }
+function _hpsTourTopo(){ try{ var h=document.querySelector('.hero'); if(h){ var r=h.getBoundingClientRect(); if(r.bottom>0) return Math.round(r.bottom); } }catch(e){} return 0; }
+function _hpsTourTecla(ev){
+  if(!_hpsTourAtivo) return;
+  try{
+    var pop=document.getElementById('hps-tour-pop'); if(!pop) return;
+    if(ev.key==='Escape'){ ev.preventDefault(); _hpsTourFechar(); return; }
+    if(ev.key==='ArrowRight'){ ev.preventDefault(); _hpsTourProx(); return; }
+    if(ev.key==='ArrowLeft'){ ev.preventDefault(); _hpsTourAnt(); return; }
+    if(ev.key==='Tab'){
+      var bts=pop.querySelectorAll('button'), a=document.activeElement;
+      if(!bts.length){ ev.preventDefault(); return; }
+      var pri=bts[0], ult=bts[bts.length-1];
+      if(!pop.contains(a)){ ev.preventDefault(); (ev.shiftKey?ult:pri).focus({preventScroll:true}); }
+      else if(!ev.shiftKey && a===ult){ ev.preventDefault(); pri.focus({preventScroll:true}); }
+      else if(ev.shiftKey && a===pri){ ev.preventDefault(); ult.focus({preventScroll:true}); }
+      return;
+    }
+    // qualquer outra tecla fora do balão não chega à página (nada é digitado no formulário por baixo do véu)
+    if(!pop.contains(ev.target) && ev.key!=='Enter' && ev.key!==' '){ ev.preventDefault(); }
+  }catch(e){}
+}
+function _hpsTourEls(){
+  var bl=document.getElementById('hps-tour-blocker');
+  if(!bl){
+    try{ document.querySelectorAll('.hps-tour-fechando').forEach(function(e){ e.remove(); }); }catch(e){}
+    bl=document.createElement('div'); bl.id='hps-tour-blocker';
+    bl.addEventListener('wheel',function(ev){ ev.preventDefault(); _hpsTourRolarDelta(ev.deltaY); },{passive:false});
+    bl.addEventListener('mousedown',function(ev){ if(!_hpsTourRolavel) return; _hpsTourDragY=ev.clientY; bl.style.cursor='grabbing'; ev.preventDefault(); });
+    bl.addEventListener('mousemove',function(ev){ if(_hpsTourDragY==null||!_hpsTourRolavel) return; var dy=_hpsTourDragY-ev.clientY; _hpsTourDragY=ev.clientY; _hpsTourRolarDelta(dy); });
+    var fim=function(){ _hpsTourDragY=null; bl.style.cursor=_hpsTourRolavel?'grab':'default'; };
+    bl.addEventListener('mouseup',fim); bl.addEventListener('mouseleave',fim);
+    bl.addEventListener('touchstart',function(ev){ if(ev.touches&&ev.touches[0]) _hpsTourTouchY=ev.touches[0].clientY; },{passive:true});
+    bl.addEventListener('touchmove',function(ev){ if(_hpsTourTouchY!=null&&ev.touches&&ev.touches[0]){ var y=ev.touches[0].clientY; _hpsTourRolarDelta(_hpsTourTouchY-y); _hpsTourTouchY=y; } ev.preventDefault(); },{passive:false});
+    bl.addEventListener('touchend',function(){ _hpsTourTouchY=null; });
+    document.body.appendChild(bl);
+    var hl=document.createElement('div'); hl.id='hps-tour-hl'; hl.className='hps-tour-esconde'; document.body.appendChild(hl);
+    var drag=document.createElement('div'); drag.id='hps-tour-drag';
+    drag.innerHTML='<div class="hps-tour-dica"><span class="ar" aria-hidden="true">⇕</span><span>Arraste ou role a página</span></div>';
+    document.body.appendChild(drag);
+    var pop=document.createElement('div'); pop.id='hps-tour-pop'; pop.className='hps-tour-esconde';
+    pop.setAttribute('role','dialog'); pop.setAttribute('aria-modal','true'); pop.setAttribute('aria-labelledby','hps-tour-titulo'); pop.setAttribute('aria-describedby','hps-tour-texto');
+    document.body.appendChild(pop);
+  }
+  return { bl:bl, hl:document.getElementById('hps-tour-hl'), pop:document.getElementById('hps-tour-pop'), drag:document.getElementById('hps-tour-drag') };
+}
+function _hpsTourHlPos(hl,top,left,w,h){
+  hl._pos={top:top,left:left,w:w,h:h};
+  hl.style.transform='translate3d('+left+'px,'+top+'px,0)';
+  hl.style.width=w+'px'; hl.style.height=h+'px';
+}
+function _hpsTourRolarDelta(dy){
+  if(!dy) return;
+  try{ window.scrollBy(0,dy); }catch(e){}
+  if(!_hpsTourDicaSumiu){ _hpsTourDicaSumiu=true; var d=document.getElementById('hps-tour-drag'); if(d) d.classList.add('hps-tour-dica-off'); }
+}
+function _hpsTourDragPos(r,pad){
+  var d=document.getElementById('hps-tour-drag'); if(!d) return;
+  var vw=window.innerWidth||0, vh=window.innerHeight||0;
+  var top=Math.max(0,r.top-pad), left=Math.max(0,r.left-pad), bottom=Math.min(vh,r.bottom+pad), right=Math.min(vw,r.right+pad);
+  d.style.top=top+'px'; d.style.left=left+'px'; d.style.width=Math.max(0,right-left)+'px'; d.style.height=Math.max(0,bottom-top)+'px';
+}
+function _hpsTourScrollAcompanha(){
+  if(_hpsTourScrollRaf) return;
+  _hpsTourScrollRaf=_hpsTourRaf(function(){
+    _hpsTourScrollRaf=0;
+    if(!_hpsTourAtivo||!_hpsTourAlvoEl) return;
+    try{
+      var els=_hpsTourEls(), r=_hpsTourAlvoEl.getBoundingClientRect(), pad=8;
+      if(els.hl.classList.contains('hps-tour-iris')||els.hl.classList.contains('hps-tour-esconde')||els.hl.classList.contains('hps-tour-semalvo')) return;
+      els.hl.classList.add('hps-tour-segue');
+      _hpsTourHlPos(els.hl,r.top-pad,r.left-pad,r.width+pad*2,r.height+pad*2);
+      if(_hpsTourRolavel && !_hpsTourDicaSumiu) _hpsTourDragPos(r,pad);
+    }catch(e){}
+  });
+}
+function _hpsTourPosicionarPop(els,r,rolavel){
+  var vw=window.innerWidth||0, vh=window.innerHeight||0;
+  var pw=Math.min(390,vw-32), ph=els.pop.offsetHeight||220, m=18, top, left;
+  if(!r){ left=(vw-pw)/2; top=Math.max(24,(vh-ph)/2.4); }
+  else if(rolavel||(r.height>vh*0.7&&r.width>vw*0.7)){ left=vw-pw-24; top=Math.max(8,vh-ph-24); }
+  else{
+    var cx=Math.max(16,Math.min(r.left+r.width/2-pw/2,vw-pw-16));
+    if(r.bottom+m+ph<=vh){ top=r.bottom+m; left=cx; }
+    else if(r.top-m-ph>=8){ top=r.top-m-ph; left=cx; }
+    else if(r.right+m+pw<=vw){ left=r.right+m; top=Math.max(8,Math.min(r.top,vh-ph-8)); }
+    else if(r.left-m-pw>=8){ left=r.left-m-pw; top=Math.max(8,Math.min(r.top,vh-ph-8)); }
+    else{
+      var yc=Math.max(8,Math.min(r.top,vh-ph-8)), baixo=Math.max(8,vh-ph-8);
+      var cand=(vw<600)?[[baixo,cx],[8,cx]]:[[baixo,cx],[8,cx],[yc,vw-pw-16],[yc,16],[baixo,vw-pw-24],[baixo,16],[8,vw-pw-16],[8,16]];
+      var melhor=cand[0], menor=Infinity;
+      cand.forEach(function(c){ var ov=Math.max(0,Math.min(c[0]+ph,r.bottom)-Math.max(c[0],r.top))*Math.max(0,Math.min(c[1]+pw,r.right)-Math.max(c[1],r.left)); if(ov<menor-0.5){ menor=ov; melhor=c; } });
+      top=melhor[0]; left=melhor[1];
+    }
+  }
+  if(vw<600) left=Math.max(8,(vw-pw)/2);
+  els.pop.style.left=left+'px'; els.pop.style.top=top+'px';
+  try{
+    var lado='centro';
+    if(r && !(rolavel||(r.height>vh*0.7&&r.width>vw*0.7))){
+      if(top>=r.bottom) lado='abaixo'; else if(top+ph<=r.top) lado='acima'; else if(left>=r.right) lado='direita'; else if(left+pw<=r.left) lado='esquerda';
+    }
+    var V={abaixo:['0px','-6px','top center'],acima:['0px','6px','bottom center'],direita:['-6px','0px','left center'],esquerda:['6px','0px','right center'],centro:['0px','6px','center']}[lado];
+    els.pop.style.setProperty('--pop-dx',V[0]); els.pop.style.setProperty('--pop-dy',V[1]); els.pop.style.transformOrigin=V[2];
+  }catch(e){}
+}
+function _hpsTourIrisFecha(hl){
+  if(hl.classList.contains('hps-tour-esconde')||hl.classList.contains('hps-tour-semalvo')||hl.classList.contains('hps-tour-iris')) return true;
+  var ps=hl._pos; if(!ps) return false;
+  hl.classList.remove('hps-tour-chega','hps-tour-abre','hps-tour-segue','hps-tour-viaja');
+  hl.classList.add('hps-tour-iris-sai','hps-tour-iris');
+  _hpsTourHlPos(hl,ps.top+ps.h/2,ps.left+ps.w/2,0,0);
+  return true;
+}
+function _hpsTourPopFica(pop){
+  try{
+    if(!pop||pop.classList.contains('hps-tour-esconde')) return false;
+    if(parseFloat(getComputedStyle(pop).opacity)<0.6) return false;
+    pop._flip=pop.getBoundingClientRect(); pop._fica=true; pop.style.pointerEvents='none';
+    return true;
+  }catch(e){ return false; }
+}
+function _hpsTourPopDesliza(pop){
+  try{
+    pop.style.pointerEvents='';
+    var a=pop._flip; pop._flip=null;
+    Array.prototype.forEach.call(pop.children,function(k){ try{ k.animate([{opacity:0.15},{opacity:1}],{duration:220,easing:'cubic-bezier(.23,1,.32,1)'}); }catch(e){} });
+    if(!a||_hpsTourReduzido()||typeof pop.animate!=='function') return;
+    var b=pop.getBoundingClientRect(), dx=a.left-b.left, dy=a.top-b.top;
+    if(Math.abs(dx)<1&&Math.abs(dy)<1) return;
+    pop.animate([{transform:'translate('+dx+'px,'+dy+'px)'},{transform:'translate(0,0)'}],{duration:340,easing:'cubic-bezier(.23,1,.32,1)'});
+  }catch(e){}
+}
+function _hpsTourEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function _hpsTourConteudo(els,p,i,rolavel){
+  var ult=(i+1>=_hpsTourPassos.length);
+  // titulo/texto são HTML ESTÁTICO escrito no código (nunca vem do banco nem do usuário)
+  els.pop.innerHTML=
+      '<div class="hps-tour-prog" aria-hidden="true"><span style="transform:scaleX('+(_hpsTourProgPrev/100)+')"></span></div>'
+    + '<div class="hps-tour-t"><span id="hps-tour-titulo">'+p.titulo+'</span><span class="hps-tour-n">'+(i+1)+'/'+_hpsTourPassos.length+'</span></div>'
+    + '<div class="hps-tour-x" id="hps-tour-texto">'+p.texto+'</div>'
+    + (rolavel?'<div class="hps-tour-rolar">⇕ Arraste ou role a página para ver esta seção inteira — o destaque acompanha.</div>':'')
+    + '<div class="hps-tour-f">'
+    +   '<button type="button" class="hps-tour-fechar" onclick="_hpsTourFechar()">Fechar</button>'
+    +   (i>0?'<button type="button" class="hps-tour-btn hps-tour-ant" onclick="_hpsTourAnt()">&larr; Anterior</button>':'')
+    +   '<button type="button" class="hps-tour-btn hps-tour-prox" onclick="_hpsTourProx()">'+(ult?'Concluir &#10003;':'Pr&oacute;ximo &rarr;')+'</button>'
+    + '</div>';
+}
+function _hpsTourAlvo(p){
+  if(!p.alvo) return null;
+  var el=null; try{ el=document.querySelector(p.alvo); }catch(e){}
+  if(el && p.subir){ try{ el=el.closest(p.subir)||el; }catch(e){} }
+  if(el && !el.getClientRects().length) el=null;
+  return el;
+}
+function _hpsTourEsperarScroll(seq,cb){
+  var ly=null, iguais=0, t0=Date.now();
+  (function tick(){
+    if(!_hpsTourAtivo||seq!==_hpsTourSeq) return;
+    var y=window.scrollY||0;
+    if(y===ly) iguais++; else { iguais=0; ly=y; }
+    if(iguais>=4||Date.now()-t0>900){ cb(); return; }
+    _hpsTourRaf(tick);
+  })();
+}
+function _hpsTourRender(p,i){
+  var els=_hpsTourEls(), seq=_hpsTourSeq;
+  _hpsTourRolavel=false;
+  try{ window.removeEventListener('scroll',_hpsTourScrollAcompanha,true); }catch(e){}
+  var alvo=_hpsTourAlvo(p);
+  _hpsTourAlvoEl=alvo;
+  var topo=_hpsTourTopo(), vh=window.innerHeight||0, vw=window.innerWidth||0;
+  var rolavel=false;
+  if(alvo){ var r1=alvo.getBoundingClientRect(); rolavel=(p.rolavel===true)||(r1.height>(vh-topo)*0.78); }
+  var fica=!!els.pop._fica, htmlVelho=fica?els.pop.innerHTML:null, htmlNovo=null;
+  els.pop._fica=false;
+  _hpsTourConteudo(els,p,i,rolavel);
+  var ph=els.pop.offsetHeight||220;
+  if(fica){ htmlNovo=els.pop.innerHTML; els.pop.innerHTML=htmlVelho; }
+  var finalizar=function(){
+    if(!_hpsTourAtivo||seq!==_hpsTourSeq) return;
+    if(fica&&htmlNovo!=null){ els.pop.innerHTML=htmlNovo; htmlNovo=null; }
+    var pad=8, r=null;
+    if(alvo){
+      var rb=alvo.getBoundingClientRect();
+      r={left:rb.left,top:rb.top,width:rb.width,height:rb.height,right:rb.right,bottom:rb.bottom};
+      var fechado=!els.hl.classList.contains('hps-tour-esconde')&&(els.hl.classList.contains('hps-tour-iris')||els.hl.classList.contains('hps-tour-semalvo'));
+      if(fechado){
+        els.hl.classList.add('hps-tour-sem-trans'); els.hl.classList.remove('hps-tour-semalvo');
+        _hpsTourHlPos(els.hl,r.top+r.height/2,r.left+r.width/2,0,0);
+        void els.hl.offsetWidth;
+        els.hl.classList.remove('hps-tour-sem-trans','hps-tour-iris','hps-tour-iris-sai');
+        els.hl.classList.add('hps-tour-abre');
+        setTimeout(function(){ els.hl.classList.remove('hps-tour-abre'); },380);
+      }
+      els.hl.classList.remove('hps-tour-semalvo','hps-tour-iris','hps-tour-iris-sai','hps-tour-segue');
+      _hpsTourHlPos(els.hl,r.top-pad,r.left-pad,r.width+pad*2,r.height+pad*2);
+      try{ window.addEventListener('scroll',_hpsTourScrollAcompanha,true); }catch(e){}
+      if(rolavel){
+        _hpsTourRolavel=true; _hpsTourDicaSumiu=false;
+        setTimeout(function(){ if(_hpsTourAtivo&&seq===_hpsTourSeq) els.hl.classList.add('hps-tour-segue'); }, fechado?380:0);
+        els.drag.classList.remove('hps-tour-dica-off'); els.drag.style.display='flex'; _hpsTourDragPos(r,pad);
+        els.bl.style.cursor='grab';
+      } else { els.drag.style.display='none'; els.bl.style.cursor='default'; }
+    } else {
+      els.hl.classList.remove('hps-tour-viaja','hps-tour-iris','hps-tour-iris-sai','hps-tour-segue','hps-tour-abre');
+      els.hl.classList.add('hps-tour-semalvo');
+      els.drag.style.display='none'; els.bl.style.cursor='default';
+    }
+    if(els.hl.classList.contains('hps-tour-viaja')) setTimeout(function(){ els.hl.classList.remove('hps-tour-viaja'); },500);
+    _hpsTourPosicionarPop(els,r,rolavel);
+    void els.hl.offsetWidth;
+    els.hl.classList.remove('hps-tour-esconde'); els.pop.classList.remove('hps-tour-esconde'); els.drag.classList.remove('hps-tour-esconde');
+    try{ var bp=els.pop.querySelector('.hps-tour-prox'); if(bp) bp.focus({preventScroll:true}); }catch(e){}
+    if(alvo){ els.hl.classList.remove('hps-tour-chega'); void els.hl.offsetWidth; els.hl.classList.add('hps-tour-chega'); }
+    if(fica) _hpsTourPopDesliza(els.pop);
+    else { els.pop.classList.remove('hps-tour-pop-in'); void els.pop.offsetWidth; els.pop.classList.add('hps-tour-pop-in'); }
+    var prog=Math.round(((i+1)/_hpsTourPassos.length)*100);
+    try{ var pb=els.pop.querySelector('.hps-tour-prog span'); if(pb) _hpsTourRaf(function(){ pb.style.transform='scaleX('+(prog/100)+')'; }); }catch(e){}
+    _hpsTourProgPrev=prog;
+  };
+  if(!alvo){ finalizar(); return; }
+  // rola só se precisar: o alvo (e, no celular, o balão abaixo dele) tem de caber abaixo do cabeçalho fixo
+  var rv=alvo.getBoundingClientRect();
+  var precisa=_hpsTourEstreito()&&!rolavel ? (rv.top<topo+8||rv.bottom+18+ph>vh-8) : (rv.top<topo+8||rv.bottom>vh-8);
+  if(rolavel) precisa=(Math.abs(rv.top-(topo+12))>4);
+  if(!precisa){ finalizar(); return; }
+  var alvoY;
+  if(rolavel||_hpsTourEstreito()) alvoY=(window.scrollY||0)+rv.top-topo-12;
+  else alvoY=(window.scrollY||0)+rv.top-topo-Math.max(12,((vh-topo)-rv.height)/2);
+  try{ window.scrollTo({top:Math.max(0,alvoY),behavior:_hpsTourReduzido()?'auto':'smooth'}); }catch(e){ window.scrollTo(0,Math.max(0,alvoY)); }
+  _hpsTourEsperarScroll(seq,finalizar);
+}
+function _hpsTourMostrar(i){
+  var p=_hpsTourPassos[i]; if(!p){ _hpsTourFechar(); return; }
+  _hpsTourIdx=i;
+  var seq=++_hpsTourSeq;
+  var els=_hpsTourEls();
+  // mesmo alvo já visível e aberto → o destaque VIAJA (desliza) em vez de fechar e reabrir
+  var alvo=_hpsTourAlvo(p), viaja=false;
+  if(alvo && !els.hl.classList.contains('hps-tour-esconde') && !els.hl.classList.contains('hps-tour-semalvo') && !els.hl.classList.contains('hps-tour-iris')){
+    var ra=alvo.getBoundingClientRect(), vh=window.innerHeight||0;
+    viaja=!(p.rolavel===true)&&ra.top>=_hpsTourTopo()&&ra.bottom<=vh&&ra.height<=vh*0.78;
+  }
+  if(!_hpsTourPopFica(els.pop)){ els.pop.classList.add('hps-tour-esconde'); }
+  els.drag.classList.add('hps-tour-esconde');
+  var jaFechado=els.hl.classList.contains('hps-tour-semalvo')||els.hl.classList.contains('hps-tour-esconde');
+  if(viaja) els.hl.classList.add('hps-tour-viaja');
+  else if(_hpsTourReduzido()||!_hpsTourIrisFecha(els.hl)) els.hl.classList.add('hps-tour-esconde');
+  setTimeout(function(){ if(_hpsTourAtivo&&seq===_hpsTourSeq) _hpsTourRender(p,i); }, viaja?150:(jaFechado?150:220));
+}
+function _hpsTourProx(){ if(_hpsTourIdx+1>=_hpsTourPassos.length){ _hpsTourCelebrar(); _hpsTourFechar(); return; } _hpsTourMostrar(_hpsTourIdx+1); }
+function _hpsTourAnt(){ if(_hpsTourIdx>0) _hpsTourMostrar(_hpsTourIdx-1); }
+function _hpsTourCelebrar(){
+  if(_hpsTourReduzido()) return;
+  try{
+    var d=document.createElement('div'); d.id='hps-tour-fim';
+    d.innerHTML='<div class="hps-tour-fim-card"><span class="chk">✓</span><span class="t">Tour concluído!</span><span class="s">Para rever, use o botão “Tour guiado” no alto desta página.</span></div>';
+    document.body.appendChild(d);
+    setTimeout(function(){ d.classList.add('off'); },1900);
+    setTimeout(function(){ try{ d.remove(); }catch(e){} },2300);
+  }catch(e){}
+}
+function _hpsTourFechar(){
+  var estava=_hpsTourAtivo;
+  _hpsTourAtivo=false; _hpsTourPassos=[]; _hpsTourSeq++; _hpsTourAlvoEl=null; _hpsTourRolavel=false;
+  try{ window.removeEventListener('scroll',_hpsTourScrollAcompanha,true); }catch(e){}
+  try{ window.removeEventListener('resize',_hpsTourReflow); }catch(e){}
+  try{ document.removeEventListener('keydown',_hpsTourTecla,true); }catch(e){}
+  try{ var bl=document.getElementById('hps-tour-blocker'); if(bl) bl.remove(); }catch(e){}
+  ['hps-tour-hl','hps-tour-pop','hps-tour-drag'].forEach(function(id){
+    var e=document.getElementById(id); if(!e) return;
+    e.removeAttribute('id'); e.classList.add('hps-tour-fechando');
+    setTimeout(function(){ try{ e.remove(); }catch(_e){} },260);
+  });
+  _hpsTourDragY=null; _hpsTourTouchY=null; _hpsTourDicaSumiu=false; _hpsTourProgPrev=0;
+  if(estava){ try{ var tb=document.getElementById('btnTourAuditoria'); if(tb) tb.focus({preventScroll:true}); }catch(e){} }
+}
+function _hpsTourReflow(){
+  if(!_hpsTourAtivo) return;
+  clearTimeout(_hpsTourReflowT);
+  _hpsTourReflowT=setTimeout(function(){
+    if(!_hpsTourAtivo||!_hpsTourPassos[_hpsTourIdx]) return;
+    try{
+      var els=_hpsTourEls(), pad=8;
+      if(_hpsTourAlvoEl && _hpsTourAlvoEl.getClientRects().length){
+        var r=_hpsTourAlvoEl.getBoundingClientRect();
+        _hpsTourHlPos(els.hl,r.top-pad,r.left-pad,r.width+pad*2,r.height+pad*2);
+        _hpsTourPosicionarPop(els,r,_hpsTourRolavel);
+        if(_hpsTourRolavel&&!_hpsTourDicaSumiu) _hpsTourDragPos(r,pad);
+      } else _hpsTourPosicionarPop(els,null,false);
+    }catch(e){}
+  },180);
+}
+
+/* ── Etapas do tour (conteúdo estático, escrito aqui; nada vem do banco) ── */
+function _tourAuditoriaPassos(){
+  return [
+    { alvo:null, titulo:'Como fazer uma auditoria',
+      texto:'Este tour mostra, em <b>16 etapas</b>, como registrar a auditoria de um prontuário na plataforma.<br><br>'
+        +'Durante o tour <b>nada é preenchido nem salvo</b> e a página fica travada, para evitar cliques sem querer. Avance com <b>Próximo</b> ou com as setas do teclado; <b>Esc</b> fecha.' },
+    { alvo:'#autoSelBox', titulo:'Escolher o prontuário',
+      texto:'Se você ainda não tem um prontuário definido, abra o <b>Seletor automático de prontuário</b>. Escolha clínica, tipo de atendimento e mês e clique em <b>Buscar atendimento</b>.<br><br>'
+        +'A plataforma sorteia um atendimento do Banco de Dados que <b>ainda não foi auditado</b> e preenche o número para você. Se a planilha não puder ser consultada, o sorteio é cancelado.' },
+    { alvo:'#attendance', subir:'.field', titulo:'Número de atendimento',
+      texto:'Se preferir, digite o número diretamente. Ao sair do campo, a plataforma confere na planilha se esse atendimento já foi auditado:'
+        +'<br>• <b>sem registro</b>: pode prosseguir;'
+        +'<br>• <b>auditoria parcial sua</b>: os itens já respondidos aparecem marcados e travados, e você completa o resto;'
+        +'<br>• <b>parcial de outro auditor</b> ou <b>auditoria completa</b>: a auditoria fica bloqueada;'
+        +'<br>• <b>planilha fora do ar</b>: tudo fica bloqueado até a conferência funcionar (botão <b>Tentar novamente</b>).' },
+    { alvo:'#auditDate', subir:'.field', titulo:'Data da auditoria',
+      texto:'Já vem preenchida com a <b>data de hoje</b>, pelo relógio do servidor. Altere só se a auditoria foi feita em outro dia. Datas futuras não são aceitas.<br><br>Ao continuar uma auditoria parcial, a data original é mantida.' },
+    { alvo:'#sectorMsel', subir:'.field', titulo:'Setor(es) auditado(s)',
+      texto:'Marque o setor do prontuário. Se o prontuário passou por <b>mais de um setor</b>, marque todos: aparece um painel para indicar quais itens correspondem a cada setor.<br><br>O sorteio <b>não</b> preenche o setor; a confirmação é sempre sua.' },
+    { alvo:'#tipoInt', subir:'.field', titulo:'Tipo de internação',
+      texto:'Selecione o tipo de internação (clínica, cirúrgica, urgência/emergência, obstétrica…), conforme consta no prontuário.' },
+    { alvo:'#diasIntern', subir:'.meta', titulo:'Contexto do prontuário',
+      texto:'O <b>nome do auditor</b> é preenchido automaticamente com o seu nome e não pode ser trocado: a autoria é registrada pelo servidor.<br><br>Informe os <b>dias de internação</b> e o <b>desfecho</b> (alta, transferência, óbito…).' },
+    { alvo:'#tipo-online', subir:'.panel', titulo:'Tipo de prontuário',
+      texto:'Escolha o que será auditado:<br>• <b>Prontuário online</b>: 20 itens;<br>• <b>Prontuário físico</b>: 17 itens exclusivos;<br>• <b>Ambos</b>: os dois conjuntos (37 itens).<br><br>Os itens exibidos mudam conforme a escolha.' },
+    { alvo:'#form .item:nth-child(3)', titulo:'Como responder um item',
+      texto:'Cada item tem o domínio, o número e a pergunta (aqui, o item 3). Clique em <b>Sim</b>, <b>Não</b> ou <b>Não se aplica</b>.<br><br>'
+        +'<b>Não se aplica</b> fica <b>fora do cálculo</b> da conformidade. Use apenas quando o item realmente não cabe àquele prontuário. Os itens 1, 2, 4 e 14 não têm essa opção.' },
+    { alvo:'#panel-itens-online', rolavel:true, titulo:'Lista de itens',
+      texto:'Percorra todos os itens. A conformidade do prontuário é calculada como <b>Sim ÷ (Sim + Não)</b>, sobre os itens e a equipe multiprofissional.' },
+    { alvo:'#multi-form .equipe-block', titulo:'Equipe multiprofissional',
+      texto:'Para cada equipe (fisioterapia, nutrição, fonoaudiologia e farmácia), responda primeiro se houve <b>atuação</b> no prontuário. A resposta de presença das 4 equipes é obrigatória para a auditoria ficar completa.<br><br>Ao responder <b>Sim</b>, aparecem os sub-itens daquela equipe.' },
+    { alvo:'#uploadArea', subir:'.panel', titulo:'Anexos (opcional)',
+      texto:'Você pode anexar imagens ou PDF (até 10 MB) que comprovem um achado. Os arquivos vão para a pasta protegida da Comissão.<br><br><b>Anexe só o necessário</b>: os anexos podem conter dados de paciente.' },
+    { alvo:'#observacoes', subir:'.panel', titulo:'Observações',
+      texto:'Registre achados que as perguntas não cobrem. Ao continuar uma auditoria parcial, o que você escreveu antes aparece aqui.' },
+    { alvo:'.actions .primary', subir:'.panel', titulo:'Salvar',
+      texto:'Clique em <b>Salvar auditoria</b> e aguarde a confirmação. A plataforma só limpa o formulário depois que o servidor confirma a gravação.<br><br>'
+        +'Se ficou algum item sem resposta, ela avisa quais são e você pode salvar como <b>parcial</b> para completar depois. Se a gravação falhar, nada se perde: as respostas continuam no formulário.' },
+    { alvo:'#btnVerPerfilColeta', titulo:'Acompanhar suas auditorias',
+      texto:'Em <b>Ver meu perfil</b> ficam as suas auditorias: <span style="color:var(--green);font-weight:800">finalizadas</span> em verde e <span style="color:var(--amber);font-weight:800">pendentes (parciais)</span> em amarelo, com o botão <b>▶ Continuar</b>.<br><br>'
+        +'Só quem iniciou uma auditoria parcial pode finalizá-la, de qualquer aparelho. Nada fica salvo no navegador.' },
+    { alvo:'#btnTourAuditoria', titulo:'Pronto!',
+      texto:'Esse é o caminho completo de uma auditoria. Para rever o tour quando quiser, use este botão <b>Tour guiado</b>.<br><br>Dúvidas sobre os critérios dos itens: consulte o regimento na Página Inicial ou fale com a presidência.' }
+  ];
+}
+function tourAuditoriaIniciar(){
+  if(!currentUser){ try{ requestColeta(document.getElementById('tab-coleta')); }catch(e){} return; }
+  if(_hpsTourAtivo) return;
+  try{ requestColeta(document.getElementById('tab-coleta')); }catch(e){}
+  try{ var ae=document.activeElement; if(ae&&ae.blur&&ae!==document.body) ae.blur(); }catch(e){}
+  tourAuditoriaMarcarVisto();
+  _hpsTourPassos=_tourAuditoriaPassos(); _hpsTourIdx=0; _hpsTourAtivo=true; _hpsTourProgPrev=0;
+  _hpsTourEls();
+  try{ document.addEventListener('keydown',_hpsTourTecla,true); }catch(e){}
+  try{ window.addEventListener('resize',_hpsTourReflow); }catch(e){}
+  setTimeout(function(){ if(_hpsTourAtivo) _hpsTourMostrar(0); },60);
+}
+/* Oferta do tour no 1º acesso a "Iniciar Auditoria" (por CONTA: perfis/<login>/tourAuditoriaVisto) */
+var _tourVistoSessao={};
+function tourAuditoriaMarcarVisto(){
+  var el=document.getElementById('tourOferta'); if(el) el.style.display='none';
+  try{ if(currentUser) _tourVistoSessao[currentUser.login]=true; }catch(e){}
+  try{ if(currentUser&&fbDB) fbDB.ref('perfis/'+currentUser.login).update({tourAuditoriaVisto:true}).catch(function(){}); }catch(e){}
+  try{ if(_profileCache) _profileCache.tourAuditoriaVisto=true; }catch(e){}
+}
+async function tourAuditoriaOfertaChecar(){
+  var el=document.getElementById('tourOferta'); if(!el) return;
+  if(!currentUser||!fbDB){ el.style.display='none'; return; }
+  var login=currentUser.login;
+  try{
+    if(_tourVistoSessao[login] || (_profileCache && _profileCache.tourAuditoriaVisto===true)){ el.style.display='none'; return; }
+    var v=(await fbDB.ref('perfis/'+login+'/tourAuditoriaVisto').once('value')).val();
+    if(!currentUser||currentUser.login!==login) return;
+    if(_tourVistoSessao[login] || _hpsTourAtivo){ el.style.display='none'; return; }   // marcado durante a leitura (corrida)
+    el.style.display=(v===true)?'none':'block';
+  }catch(e){ el.style.display='none'; }
+}
+
+
+/* === LAYOUT MOBILE (2026-10-15, parte 27) ===
+   (1) Abas do topo: no celular elas rolam na horizontal e "Sair"/"Banco de Dados" ficavam escondidas sem
+   nenhum sinal. Agora a borda esmaece onde há mais abas e a aba ativa é trazida para o centro.
+   (2) Campos da auditoria: o campo inteiro (caixa cinza com o rótulo) passa a dar foco no controle —
+   antes só a linha fina do input (16–18 px de altura) recebia o toque. */
+function _mobAbasFade(){
+  try{ var t=document.querySelector('.tabs'); if(!t) return;
+    var ov=t.scrollWidth>t.clientWidth+2;
+    t.classList.toggle('tabs-esq', ov && t.scrollLeft>4);
+    t.classList.toggle('tabs-dir', ov && t.scrollLeft+t.clientWidth<t.scrollWidth-4);
+  }catch(e){}
+}
+function _mobAbaAtivaVisivel(){
+  try{ var t=document.querySelector('.tabs'), a=t&&t.querySelector('.tab.active');
+    if(!t||!a||t.scrollWidth<=t.clientWidth+2){ _mobAbasFade(); return; }
+    var alvo=a.offsetLeft-(t.clientWidth-a.offsetWidth)/2;
+    try{ t.scrollTo({left:Math.max(0,alvo),behavior:'smooth'}); }catch(e){ t.scrollLeft=Math.max(0,alvo); }
+    setTimeout(_mobAbasFade,400);
+  }catch(e){}
+}
+(function(){
+  try{
+    var t=document.querySelector('.tabs');
+    if(t){
+      t.addEventListener('scroll',_mobAbasFade,{passive:true});
+      if(window.MutationObserver) new MutationObserver(function(rs){ if(rs.some(function(r){ return r.target!==t; })) _mobAbasFade(); }).observe(t,{subtree:true,attributes:true,attributeFilter:['style','class']});
+    }
+    window.addEventListener('resize',_mobAbasFade);
+    window.addEventListener('load',function(){ setTimeout(_mobAbaAtivaVisivel,50); });
+    document.addEventListener('click',function(ev){
+      var tg=ev.target; if(!tg||!tg.closest) return;
+      var f=tg.closest('.field'); if(!f) return;
+      if(tg.closest('input,select,textarea,button,a,.sec-msel')) return;
+      var c=f.querySelector('input:not([type=hidden]):not([readonly]):not([disabled]),select:not([disabled]),textarea:not([readonly])');
+      if(c){ try{ c.focus(); }catch(e){} }
+    });
+  }catch(e){}
+})();
+
+// Página inicial: sobre — exceto quando a página foi aberta por um link de convite (vai direto à tela do convite)
 show('sobre', document.getElementById('tab-inicio'));
+try{ conviteRotear(); }catch(e){}
 
 
 </script>
