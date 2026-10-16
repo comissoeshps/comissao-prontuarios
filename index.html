@@ -644,6 +644,16 @@ body.dark #hps-tour-hl.hps-tour-semalvo,body.dark #hps-tour-hl.hps-tour-iris{box
 @keyframes aaTap{0%{transform:scale(.93)}100%{transform:scale(1)}}
 @keyframes aaChega{0%{box-shadow:0 0 0 0 rgba(31,111,235,0)}28%{box-shadow:0 0 0 5px rgba(31,111,235,.28)}100%{box-shadow:0 0 0 0 rgba(31,111,235,0)}}
 @media (prefers-reduced-motion:reduce){ .choice.aa-tap{animation:none} .aa-chega{animation:none} }
+
+/* === AVISO DE VERSÃO NOVA (2026-10-16, parte 33) === */
+#verAviso{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:10010;width:min(560px,calc(100vw - 24px));background:var(--navy);color:#fff;border-radius:14px;box-shadow:0 12px 32px rgba(12,32,58,.35);padding:14px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-family:'DM Sans',sans-serif;animation:verEntra .3s ease-out}
+body.dark #verAviso{background:#1F6FEB}
+#verAviso .vt{flex:1;min-width:200px;font-size:13.5px;line-height:1.45}
+#verAviso .vt b{display:block;font-size:14.5px;margin-bottom:2px}
+#verAviso button{border:0;border-radius:10px;padding:10px 16px;min-height:44px;font-weight:800;font-size:13.5px;cursor:pointer;background:#fff;color:#0B1F3A;font-family:inherit}
+#verAviso button:disabled{opacity:.6;cursor:default}
+@keyframes verEntra{from{opacity:0;transform:translate(-50%,12px)}to{opacity:1;transform:translate(-50%,0)}}
+@media (prefers-reduced-motion:reduce){#verAviso{animation:none}}
 </style>
 </head>
 <body>
@@ -1841,6 +1851,15 @@ function membrosAdminRender(){
     +' <button class="secondary" style="padding:6px 12px;margin-left:8px" onclick="cfgPlatSalvar()">Salvar</button>'
     +'<div style="font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.5">Padrão: <b>desligado</b> — membros efetivos não veem a aba Resultados (as demais abas continuam); a diretoria (presidente, vice e secretário/a) sempre vê Resultados. Vale na hora para quem estiver logado. '
     +'É só visual — não é barreira de segurança para os dados.</div></div>';
+  (function(){
+    var av=CFG_PLAT.aviso_versao, ult=(av && av.em) ? ('Último aviso: '+_verFmt(av.em)+' (versão de '+_verFmt(Date.parse(av.lm))+')') : 'Nenhum aviso emitido ainda.';
+    h+='<div style="margin-top:16px;padding-top:12px;border-top:1px dashed var(--line)">'
+      +'<div style="font-weight:800;color:var(--navy);margin-bottom:6px">🔄 Aviso de atualização da plataforma</div>'
+      +'<div style="font-size:12px;color:var(--ink);line-height:1.6">Versão no ar (GitHub Pages): <b id="verNoAr">verificando…</b><br>Versão desta aba: <b>'+mEsc(_verFmt(_verDocLM()))+'</b><br><span style="color:var(--muted)">'+mEsc(ult)+'</span></div>'
+      +'<button class="secondary" style="padding:6px 12px;margin-top:8px" onclick="verEmitir()">Emitir aviso de atualização</button>'
+      +'<div style="font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.5">Use <b>depois</b> de subir o index.html novo. Só quem estiver com uma versão anterior aberta recebe o aviso; a página atualiza em 60 s e a auditoria em andamento volta sozinha. Nenhuma verificação automática roda nos computadores.</div></div>';
+  })();
+  setTimeout(verNoArCarregar, 0);
   if(!logins.length){ h+='<div id="membrosAdminMsg" style="font-size:12px;margin-top:10px;min-height:16px"></div></div>'; box.innerHTML=h; return; } // sem "Adicionar" antes de importar
   h+='<div style="margin-top:16px;padding-top:12px;border-top:1px dashed var(--line)">';
   h+='<div style="font-weight:800;color:var(--navy);margin-bottom:6px">🎟️ Convidar membro (entra com a conta Google)</div>';
@@ -1991,6 +2010,7 @@ async function membroExcluirDefinitivo(login){
     upd['online/'+login]=null;
     upd['auth/'+login]=null;
     upd['conv_meta/'+login]=null;
+    upd['rascunhos/'+login]=null;   // parte 32
     var uids={};
     try{ var lu=(await fbDB.ref('login_uid/'+login).once('value')).val(); if(lu && lu!=='pendente') uids[lu]=1; }catch(e){}
     try{
@@ -2522,7 +2542,7 @@ window.addEventListener('load',function(){ try{ conviteRotear(); }catch(e){} });
    Firebase: config_plataforma/resultados_auditores (bool). Leitura: autorizados; escrita: só owner.
    Ausente ou ilegível = visível (comportamento anterior). É controle de INTERFACE,
    não de acesso a dados (a base continua acessível pelo Apps Script a qualquer autorizado). */
-var CFG_PLAT={resultados_auditores:false, excluidos:{}};
+var CFG_PLAT={resultados_auditores:false, excluidos:{}, aviso_versao:null};
 var _cfgPlatRef=null;
 /* 2026-10-14: Resultados — diretoria (presidente, vice, secretário) sempre vê;
    membro efetivo só vê se o presidente ligar "Resultados para membros efetivos" (padrão: DESLIGADO).
@@ -2554,14 +2574,16 @@ function cfgPlatCarregar(){
       var v=snap.val()||{};
       CFG_PLAT.resultados_auditores = (v.resultados_auditores===true);
       CFG_PLAT.excluidos = (v.excluidos && typeof v.excluidos==='object') ? v.excluidos : {};
+      CFG_PLAT.aviso_versao = (v.aviso_versao && typeof v.aviso_versao==='object') ? v.aviso_versao : null;
       abasAplicar();
+      try{ verAvaliarAviso(CFG_PLAT.aviso_versao); }catch(e){}
       if(_membrosAdminAberto) membrosAdminRender();
     }, function(err){ console.warn('[config_plataforma] usando padrão (visível):', err && err.message); });
   }catch(e){}
 }
 function cfgPlatDesligar(){
   if(_cfgPlatRef){ try{ _cfgPlatRef.off(); }catch(e){} _cfgPlatRef=null; }
-  CFG_PLAT={resultados_auditores:false, excluidos:{}};
+  CFG_PLAT={resultados_auditores:false, excluidos:{}, aviso_versao:null};
 }
 async function cfgPlatSalvar(){
   try{
@@ -2779,12 +2801,15 @@ let _inactivityTimer = null;
 
 function startInactivityTimer(){
   clearInactivityTimer();
-  _inactivityTimer = setTimeout(function(){
+  _inactivityTimer = setTimeout(async function(){
     if(currentUser){
-      // Fazer logout por inatividade
-      if(fbAuth) fbAuth.signOut().catch(function(){});
-      logout();
-      alert('Sua sessão expirou por inatividade. Faça login novamente.');
+      // parte 32: antes de encerrar, guarda no SERVIDOR (rascunhos/<login>) a auditoria em andamento
+      var tinha=false; try{ tinha=!!rascunhoEstado(); }catch(e){}
+      try{ await logout(); }catch(e){}
+      try{ if(fbAuth) fbAuth.signOut().catch(function(){}); }catch(e){}
+      alert(tinha
+        ? 'Sua sessão foi encerrada após 1 hora sem uso.\n\nA auditoria em andamento foi guardada no servidor (não neste computador). Ao entrar novamente, em qualquer computador, você poderá continuar de onde parou.'
+        : 'Sua sessão expirou por inatividade. Faça login novamente.');
     }
   }, INACTIVITY_LIMIT);
 }
@@ -3015,6 +3040,7 @@ async function afterLogin(){
   listenChat();
   try{ renderRegimento(); }catch(e){}
   try{ setorPedirSeVazio(); }catch(e){}
+  try{ rascunhoVerificarAoEntrar(); }catch(e){}   // parte 32
   try{ var _cfT=document.getElementById('coletaForm'); if(_cfT && _cfT.style.display==='block') tourAuditoriaOfertaChecar(); }catch(e){}
 }
 
@@ -4462,6 +4488,7 @@ function setVal(key,val){
 }
 
 function clearForm(){
+  _attPrefill=null; _rascCriadoEm=null;   // parte 32
   current={};
   existingRecordId=null; lockedItemNums=new Set(); lockedFisico=new Set(); blockedSubmit=false; sheetsDown=false; blockedMotivo='';
   // Limpar campos — auditor NÃO é resetado (fica sempre o do login)
@@ -4493,6 +4520,7 @@ function clearForm(){
   }
   currentFisico={};lockedFisico=new Set();pendingFiles=[];if(typeof renderFisicoExtra==='function')renderFisicoExtra();if(typeof renderFileList==='function')renderFileList();
   renderForm();renderMultiForm();
+  try{ rascunhoAgendar(); }catch(e){}   // parte 32: formulário vazio → o rascunho no servidor é apagado
 }
 
 function save(){
@@ -4608,6 +4636,7 @@ async function salvarAuditoriaServidor(record, wasParcial, filesToUpload){
       return;
     }
     var uploadAtt=record.attendance, uploadAud=record.auditor;
+    try{ rascunhoApagar(); }catch(e){}   // parte 32: gravada na planilha → o rascunho não é mais necessário
     clearForm();
     window.scrollTo({top:0,behavior:'smooth'});
     if(filesToUpload.length){
@@ -4878,6 +4907,10 @@ function attVerifyFail(box,motivo){
 }
 async function checkAttendance(){
   const att=$('attendance').value.trim();
+  // parte 32: o nº anterior tinha dados PRÉ-PREENCHIDOS da planilha (parcial/completa/de outro auditor) e o
+  // auditor trocou de nº → limpa TUDO o que veio dele (respostas, travas, setores, tipo, dias, desfecho,
+  // observações, data original, anexos escolhidos, bloqueio do painel físico) antes de consultar o novo nº.
+  if(_attPrefill && _attPrefill!==att) _attLimparPrefill(att);
   const box=$('attendanceStatus');
   existingRecordId=null; lockedItemNums=new Set(); lockedFisico=new Set(); blockedSubmit=false; sheetsDown=false; blockedMotivo='';
 
@@ -4920,6 +4953,7 @@ async function checkAttendance(){
     // Usa a MESMA linha que o servidor (saveAuditoria) atualiza: a PRIMEIRA com este nº
     const row=matches[0];
     const rec=rowToRecord(row);
+    _attPrefill=att;   // parte 32: daqui em diante o formulário recebe dados deste nº
     const recTipo=(rec.tipoProntuario||'online').toLowerCase();
     // Escopo por tipo de prontuário:
     //  - online: itens online (ITEMS) + equipe multiprofissional
@@ -8040,6 +8074,267 @@ function _aaAvancar(prefixo){
   document.addEventListener('DOMContentLoaded',function(){ try{ var t=document.getElementById('aaToggle'); if(t) t.checked=aaLigado(); }catch(e){} });
   try{ var t0=document.getElementById('aaToggle'); if(t0) t0.checked=aaLigado(); }catch(e){}
 })();
+
+
+/* === RASCUNHO DA AUDITORIA NO SERVIDOR (2026-10-16, parte 32) ======================================
+   Pedido do Gabriel: (1) trocar de nº de atendimento limpa o que foi pré-preenchido pelo nº anterior;
+   (2) sessão encerrada por 1 h sem uso NÃO perde a auditoria: ao entrar de novo (em QUALQUER computador)
+   a plataforma pergunta se o auditor quer continuar. NADA fica no navegador — o rascunho fica no Firebase,
+   em rascunhos/<login> (regras v29: só o próprio auditor lê/grava; o presidente só pode APAGAR, na exclusão
+   definitiva). Gravado ~2,5 s após cada alteração, ao esconder/fechar a aba e antes de encerrar a sessão.
+   Apagado quando a auditoria é salva na planilha, ao "Limpar formulário", ao descartar, ou quando o
+   formulário fica vazio. Anexos escolhidos (arquivos) NÃO entram no rascunho. */
+var _attPrefill=null;
+function _attLimparPrefill(novo){
+  _rascSuprimir++;
+  try{ clearForm(); }finally{ _rascSuprimir--; }
+  var a=$('attendance'); if(a) a.value=novo||'';
+}
+var _rascT=0, _rascSujo=false, _rascPronto=false, _rascPodeApagar=false, _rascSuprimir=0, _rascCriadoEm=null;
+function _rascRef(){ initFirebase(); return fbDB.ref('rascunhos/'+currentUser.login); }
+function _rascResp(o){ var out={}; Object.keys(o||{}).forEach(function(k){ var v=o[k]; if((v==='sim'||v==='nao'||v==='na') && String(k).length<=40) out[k]=v; }); return out; }
+function rascunhoEstado(){
+  if(blockedSubmit && !isAdmin()) return null;            // só consulta (auditoria completa / de outro auditor): nada a guardar
+  var att=String(($('attendance')||{}).value||'').trim().slice(0,40);
+  var ans=_rascResp(current), fis=_rascResp(currentFisico);
+  var obs=String(($('observacoes')||{}).value||'').slice(0,5000);
+  if(!att && !Object.keys(ans).length && !Object.keys(fis).length && !obs.trim()) return null;
+  var set=JSON.stringify({s:selSetores||[], i:setorItens||{}}); if(set.length>4000) set=JSON.stringify({s:selSetores||[], i:{}}).slice(0,4000);
+  var tp=(tipoProntuario==='fisico'||tipoProntuario==='ambos')?tipoProntuario:'online';
+  return { v:1, atendimento:att, data:String(($('auditDate')||{}).value||'').slice(0,20), dataEditada:!!_dataAuditoriaEditada,
+    tipoInt:String(($('tipoInt')||{}).value||'').slice(0,80), diasIntern:String(($('diasIntern')||{}).value||'').slice(0,10),
+    desfecho:String(($('desfecho')||{}).value||'').slice(0,80), tipoProntuario:tp, setores:set, observacoes:obs,
+    answers:ans, fisico:fis, criadoEm:(_rascCriadoEm||(_rascCriadoEm=Date.now())), atualizadoEm:firebase.database.ServerValue.TIMESTAMP };
+}
+function rascunhoAgendar(){
+  if(!_rascPronto || _rascSuprimir>0 || !currentUser) return;
+  _rascSujo=true; clearTimeout(_rascT); _rascT=setTimeout(rascunhoSalvarAgora, 2500);
+}
+function rascunhoSalvarAgora(){
+  clearTimeout(_rascT); _rascT=0;
+  if(!_rascPronto || !currentUser || !fbDB){ return Promise.resolve(); }
+  var e=null; try{ e=rascunhoEstado(); }catch(err){ return Promise.resolve(); }
+  _rascSujo=false;
+  if(!e && !_rascPodeApagar) return Promise.resolve();
+  var p= e ? _rascRef().set(e) : _rascRef().remove();
+  return p.catch(function(err){ _rascSujo=true; console.warn('[rascunho] não foi possível guardar no servidor:', err && err.message); });
+}
+function rascunhoApagar(){
+  clearTimeout(_rascT); _rascT=0; _rascSujo=false; _rascCriadoEm=null;
+  if(!currentUser || !fbDB) return Promise.resolve();
+  return _rascRef().remove().catch(function(){});
+}
+function _rascComTeto(p, ms){ return Promise.race([p, new Promise(function(r){ setTimeout(r, ms); })]); }
+// alterações no formulário → agenda a gravação
+(function(){
+  var f=document.getElementById('coletaForm');
+  if(f) ['input','change','click'].forEach(function(ev){ f.addEventListener(ev, function(){ try{ rascunhoAgendar(); }catch(e){} }, true); });
+  var flush=function(){ if(_rascSujo){ try{ rascunhoSalvarAgora(); }catch(e){} } };
+  document.addEventListener('visibilitychange', function(){ if(document.hidden) flush(); });
+  window.addEventListener('pagehide', flush);
+})();
+// toda resposta registrada (toque, teclado ou programática) marca o rascunho como alterado
+(function(){
+  var _sv=setVal, _svF=setValFisico;
+  setVal=function(){ var r=_sv.apply(this, arguments); try{ rascunhoAgendar(); }catch(e){} return r; };
+  setValFisico=function(){ var r=_svF.apply(this, arguments); try{ rascunhoAgendar(); }catch(e){} return r; };
+})();
+// a conferência do nº pode pré-preencher ou bloquear → atualiza o rascunho ao terminar
+(function(){ var _ca=checkAttendance; checkAttendance=async function(){ var r=await _ca.apply(this, arguments); try{ rascunhoAgendar(); }catch(e){} return r; }; })();
+// sair (botão ou inatividade): guarda o rascunho ANTES de encerrar e limpa o formulário da tela
+(function(){
+  var _lo=logout;
+  var depois=function(){
+    _rascSuprimir++;
+    try{ _lo(); }
+    finally{
+      try{ clearForm(); }catch(e){}
+      _rascSuprimir--; clearTimeout(_rascT); _rascT=0; _rascSujo=false; _rascPronto=false; _rascPodeApagar=false; _rascCriadoEm=null;
+      try{ var m=document.getElementById('rascModal'); if(m) m.remove(); }catch(e){}
+    }
+  };
+  logout=function(){
+    var pendente=_rascPronto && currentUser && (_rascSujo || _rascT);
+    if(!pendente){ depois(); return Promise.resolve(); }
+    return _rascComTeto(rascunhoSalvarAgora(), 6000).then(depois, depois);
+  };
+})();
+async function rascunhoVerificarAoEntrar(){
+  _rascPronto=false; _rascPodeApagar=false;
+  if(!currentUser) return;
+  var login=currentUser.login, d=null;
+  try{ initFirebase(); await waitForAuth(); d=(await _rascComTeto(_rascRef().once('value'), 10000)); d=d&&d.val ? d.val() : null; }
+  catch(e){ console.warn('[rascunho] leitura:', e && e.message); _rascPronto=true; return; }   // sem leitura: grava, mas nunca apaga
+  if(!currentUser || currentUser.login!==login) return;
+  if(!d || typeof d!=='object'){ _rascPronto=true; _rascPodeApagar=true; try{ sessionStorage.removeItem('hps_retomar_rascunho'); }catch(e){} return; }
+  var retomar=false; try{ retomar=sessionStorage.getItem('hps_retomar_rascunho')==='1'; sessionStorage.removeItem('hps_retomar_rascunho'); }catch(e){}
+  if(retomar){ rascunhoRestaurar(d, 'A plataforma foi atualizada. Sua auditoria em andamento foi restaurada'); return; }   // parte 33
+  _rascMostrarOferta(d);
+}
+function _rascMostrarOferta(d){
+  try{ var old=document.getElementById('rascModal'); if(old) old.remove(); }catch(e){}
+  var nResp=Object.keys(d.answers||{}).length+Object.keys(d.fisico||{}).length;
+  var quando=''; try{ if(d.atualizadoEm) quando=new Date(d.atualizadoEm).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); }catch(e){}
+  var div=document.createElement('div'); div.id='rascModal';
+  div.style.cssText='position:fixed;inset:0;background:rgba(11,31,58,.55);display:flex;align-items:center;justify-content:center;z-index:10020;padding:16px';
+  div.innerHTML='<div role="dialog" aria-modal="true" aria-labelledby="rascTit" style="background:var(--card);color:var(--ink);border-radius:18px;max-width:440px;width:100%;padding:22px;box-shadow:0 18px 50px rgba(12,32,58,.3);font-family:\'DM Sans\',sans-serif">'
+    +'<div id="rascTit" style="font-size:17px;font-weight:900;color:var(--navy)">Auditoria não salva</div>'
+    +'<p style="font-size:13.5px;line-height:1.6;margin:10px 0 0">Você tem uma auditoria em andamento que ainda não foi salva na planilha'
+    +(d.atendimento?': atendimento <b>'+escapeHtml(String(d.atendimento))+'</b>':'')
+    +(nResp?', '+nResp+' item(ns) respondido(s)':'')
+    +(quando?', última alteração em '+escapeHtml(quando):'')+'.</p>'
+    +'<p style="font-size:12.5px;color:var(--muted);line-height:1.55;margin:8px 0 0">Ela foi guardada no servidor, não neste computador. Anexos escolhidos antes não são guardados e precisam ser adicionados de novo.</p>'
+    +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px">'
+    +'<button type="button" class="primary" id="rascContinuar" style="flex:1;min-width:160px">Continuar auditoria</button>'
+    +'<button type="button" class="secondary" id="rascDescartar" style="flex:1;min-width:120px">Descartar</button></div></div>';
+  document.body.appendChild(div);
+  document.getElementById('rascContinuar').onclick=function(){ div.remove(); rascunhoRestaurar(d); };
+  document.getElementById('rascDescartar').onclick=function(){
+    if(!confirm('Descartar a auditoria não salva'+(d.atendimento?' do atendimento '+d.atendimento:'')+'?\n\nAs respostas guardadas serão apagadas. A planilha não é alterada.')) return;
+    div.remove(); _rascPronto=true; _rascPodeApagar=true; rascunhoApagar();
+  };
+  try{ document.getElementById('rascContinuar').focus(); }catch(e){}
+}
+async function rascunhoRestaurar(d, motivo){
+  _rascSuprimir++;
+  var aviso='';
+  try{
+    try{ requestColeta(document.getElementById('tab-coleta')); }catch(e){}
+    clearForm();
+    var att=String(d.atendimento||'');
+    $('attendance').value=att;
+    if(att){ await checkAttendance(); }
+    if(sheetsDown){
+      aviso='Não foi possível conferir o atendimento na planilha agora. Use "Tentar novamente" no aviso acima; as respostas guardadas continuam no servidor.';
+      _rascPronto=true; _rascPodeApagar=false;   // não apaga o rascunho enquanto não conferir
+      return;
+    }
+    if(blockedSubmit && !isAdmin()){
+      aviso='O atendimento '+att+' já foi finalizado ou está em andamento por outro auditor. A auditoria não salva foi descartada.';
+      _rascPronto=true; _rascPodeApagar=true; rascunhoApagar();
+      return;
+    }
+    var semHistorico=!existingRecordId && !lockedItemNums.size && !lockedFisico.size;
+    if(semHistorico && d.tipoProntuario) setTipoProntuario(d.tipoProntuario);
+    try{ var st=JSON.parse(d.setores||'{}'); var lista=(st.s||[]).filter(function(x){ return SETORES.indexOf(x)>=0; });
+      if(lista.length && (!selSetores.length || semHistorico)){ selSetores=lista; setorItens=st.i||{}; lista.forEach(function(x){ if(!setorItens[x]) setorItens[x]={online:'todos',fisico:'todos'}; }); renderSectorMsel(); renderSectorItemsPanel(); } }catch(e){}
+    if(d.tipoInt) $('tipoInt').value=d.tipoInt;
+    if(d.diasIntern) $('diasIntern').value=d.diasIntern;
+    if(d.desfecho){ $('desfecho').value=d.desfecho; try{ onDesfechoChange(d.desfecho); }catch(e){} }
+    if(d.observacoes) $('observacoes').value=d.observacoes;
+    Object.keys(d.answers||{}).forEach(function(k){ var kn=isNaN(Number(k))?k:Number(k); if(!lockedItemNums.has(kn)) current[kn]=d.answers[k]; });
+    Object.keys(d.fisico||{}).forEach(function(k){ if(!lockedFisico.has(String(k))) currentFisico[k]=d.fisico[k]; });
+    if(d.dataEditada && d.data){ $('auditDate').value=d.data; _dataAuditoriaEditada=true; }
+    renderForm(); renderMultiForm(); if(typeof renderFisicoExtra==='function') renderFisicoExtra();
+    _rascCriadoEm=d.criadoEm||Date.now();
+    _rascPronto=true; _rascPodeApagar=true;
+    aviso=(motivo||'Auditoria não salva restaurada')+(att?' (atendimento '+att+')':'')+'. Confira as respostas e salve quando terminar.';
+  } finally {
+    _rascSuprimir--;
+    if(_rascPronto) rascunhoAgendar();
+    if(aviso){ try{ var b=$('attendanceStatus'); if(b){ b.style.display='block'; b.insertAdjacentHTML('afterbegin','<div class="alert-box" style="background:#EAF2FF;border:1px solid #90BBF5;color:#1a4a8a;margin-bottom:8px"><span class="ic">💾</span><div>'+escapeHtml(aviso)+'</div></div>'); } }catch(e){} }
+  }
+}
+
+
+/* === AVISO DE VERSÃO NOVA — EMITIDO PELO PRESIDENTE (2026-10-16, parte 33, revisada) ===============
+   Sem verificação periódica. O presidente (owner), depois de subir o index.html, clica em
+   "Emitir aviso de atualização" na Gestão de membros. Isso grava config_plataforma/aviso_versao =
+   {lm: Last-Modified da versão no ar, em, por}. Toda aba logada já escuta config_plataforma em tempo real
+   (mesmo listener da aba Resultados — nenhuma requisição extra). Se a página aberta for MAIS ANTIGA que
+   a versão anunciada (document.lastModified < lm) → aviso + contagem de 60 s. Quem já está na versão
+   nova, ou entra depois, não vê nada.
+   • Antes de recarregar: grava o rascunho NO SERVIDOR e marca na sessão da aba (sessionStorage, só um
+     sinal) que o rascunho volta sozinho depois do recarregamento. Também força o navegador a buscar o
+     HTML de novo (fetch cache:'reload'), contornando o cache de 10 min do GitHub Pages.
+   • A contagem ESPERA enquanto houver anexos não enviados ou um salvamento em andamento.
+   • Anti-repetição: se a aba acabou de recarregar por versão (< 3 min) e ainda assim veio a antiga
+     (CDN atrasado), só mostra o aviso, sem forçar. */
+var _verAvisoOn=false, _verCont=0, _verSemForcar=false;
+(function(){ try{ var t=Number(sessionStorage.getItem('hps_ver_reload')||0); if(t && Date.now()-t<180000) _verSemForcar=true; }catch(e){} })();
+function _verUrl(){ return location.pathname+'?versao='+Date.now().toString(36); }
+function _verDocLM(){
+  // document.lastModified = "MM/DD/AAAA HH:MM:SS" (hora local) a partir do cabeçalho Last-Modified do HTML
+  var m=String(document.lastModified||'').match(/^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2}):(\d{2})$/);
+  return m ? new Date(+m[3],+m[1]-1,+m[2],+m[4],+m[5],+m[6]).getTime() : 0;
+}
+function verAvaliarAviso(a){
+  try{
+    if(!a || typeof a.lm!=='string' || _verAvisoOn) return false;
+    var alvo=Date.parse(a.lm), meu=_verDocLM();
+    if(!alvo || !meu) return false;
+    if(meu >= alvo-1000) return false;          // esta aba já está na versão anunciada (ou mais nova)
+    _verMostrarAviso(); return true;
+  }catch(e){ return false; }
+}
+function _verFmt(ms){ try{ return new Date(ms).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); }catch(e){ return String(ms); } }
+async function verNoArCarregar(){
+  var el=document.getElementById('verNoAr'); if(!el) return '';
+  try{
+    var h=await fetch(_verUrl(),{method:'HEAD',cache:'no-store'});
+    var lm=h.ok ? (h.headers.get('Last-Modified')||'') : '';
+    el.textContent = lm ? _verFmt(Date.parse(lm)) : 'não foi possível ler';
+    return lm;
+  }catch(e){ el.textContent='não foi possível ler'; return ''; }
+}
+async function verEmitir(){
+  try{
+    if(!currentUser || currentUser.login!==OWNER_LOGIN) throw new Error('Apenas o presidente pode emitir o aviso.');
+    var lm=await verNoArCarregar();
+    if(!lm || !Date.parse(lm)) throw new Error('não consegui ler a data da versão no ar. Tente de novo em instantes.');
+    var ant=CFG_PLAT.aviso_versao;
+    if(ant && ant.lm===lm && !confirm('Já existe um aviso emitido para esta mesma versão ('+_verFmt(Date.parse(lm))+'). Emitir de novo?')) return;
+    if(!confirm('Versão no ar desde '+_verFmt(Date.parse(lm))+'.\n\nConfirme que o index.html NOVO já está publicado (abra o site em aba anônima se tiver dúvida).\n\nEmitir o aviso? Quem estiver com uma versão anterior aberta verá "Nova versão disponível" e a página atualiza sozinha em 60 s (a auditoria em andamento é guardada e volta).')) return;
+    initFirebase(); await waitForAuth();
+    var v={lm:lm, em:Date.now(), por:currentUser.login};
+    await fbDB.ref('config_plataforma/aviso_versao').set(v);
+    CFG_PLAT.aviso_versao=v;
+    if(_membrosAdminAberto) membrosAdminRender();
+    mMsg('✔ Aviso de atualização emitido (versão de '+_verFmt(Date.parse(lm))+'). Quem estiver com versão anterior aberta recebe o aviso agora.',true);
+  }catch(e){ mMsg('Erro ao emitir aviso: '+(mIsPermDenied(e)?'permissão negada (as regras v30 já foram publicadas no Firebase?)':(e.message||e)),false); }
+}
+function _verBloqueios(){
+  var m=[]; try{ if(typeof pendingFiles!=='undefined' && pendingFiles && pendingFiles.length) m.push('anexos escolhidos ainda não enviados'); }catch(e){}
+  try{ if(typeof _salvandoAuditoria!=='undefined' && _salvandoAuditoria) m.push('salvamento em andamento'); }catch(e){}
+  return m;
+}
+function _verMostrarAviso(){
+  if(_verAvisoOn) return; _verAvisoOn=true;
+  var d=document.createElement('div'); d.id='verAviso'; d.setAttribute('role','status'); d.setAttribute('aria-live','polite');
+  d.innerHTML='<div class="vt"><b>Nova versão da plataforma disponível</b><span id="verTxt"></span></div><button type="button" id="verBtn">Atualizar agora</button>';
+  document.body.appendChild(d);
+  document.getElementById('verBtn').onclick=function(){ verAtualizar(); };
+  var resta=60;
+  var pintar=function(){
+    var el=document.getElementById('verTxt'); if(!el) return;
+    var b=_verBloqueios();
+    var guarda=(typeof currentUser!=='undefined' && currentUser)?' A auditoria em andamento fica guardada e volta sozinha.':'';
+    if(_verSemForcar) el.textContent='Atualize para usar a versão mais recente.'+guarda;
+    else if(b.length) el.textContent='A atualização automática espera: '+b.join(' e ')+'. Envie ou remova os anexos, ou atualize agora.';
+    else el.textContent='A página será atualizada em '+resta+' s.'+guarda;
+  };
+  pintar();
+  if(_verSemForcar) return;
+  _verCont=setInterval(function(){
+    if(_verBloqueios().length){ pintar(); return; }
+    resta--; pintar();
+    if(resta<=0){ clearInterval(_verCont); verAtualizar(); }
+  },1000);
+}
+async function verAtualizar(){
+  var btn=document.getElementById('verBtn'); if(btn){ btn.disabled=true; btn.textContent='Atualizando…'; }
+  try{ clearInterval(_verCont); }catch(e){}
+  try{
+    if(typeof currentUser!=='undefined' && currentUser && typeof rascunhoEstado==='function' && _rascPronto){
+      var temRasc=!!rascunhoEstado();
+      await _rascComTeto(rascunhoSalvarAgora(), 6000);
+      if(temRasc){ try{ sessionStorage.setItem('hps_retomar_rascunho','1'); }catch(e){} }
+    }
+  }catch(e){}
+  try{ sessionStorage.setItem('hps_ver_reload', String(Date.now())); }catch(e){}
+  try{ await _rascComTeto(fetch(location.pathname+location.search,{cache:'reload'}), 8000); }catch(e){}   // renova o cache do HTML (GitHub Pages: max-age=600)
+  location.reload();
+}
 
 // Página inicial: sobre — exceto quando a página foi aberta por um link de convite (vai direto à tela do convite)
 show('sobre', document.getElementById('tab-inicio'));
