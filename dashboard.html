@@ -370,73 +370,120 @@ async function getIdToken(){
 }
 
 async function apiCall(action, payload){
-  /* 2026-10-16 (parte 30) — ENTREGA RESILIENTE. Diagnóstico do bloqueio frequente ("Banco de dados indisponível"):
-     o Apps Script NÃO falha — na página Execuções todo doPost aparece "Concluído" em 0,4–5 s. A falha é na ENTREGA
-     da resposta pelo Google (script.googleusercontent.com): ela às vezes demora 10–25 s, volta como página HTML de
-     erro (404) ou é redirecionada de volta ao /exec como GET (o doGet aparece 9–17 s DEPOIS de um doPost já
-     concluído). ⚠️ Logo, "POST virou GET" NÃO prova que o doPost deixou de rodar (premissa de 28/09 corrigida).
-     A versão anterior desistia na 1ª página de erro e não tinha tempo-limite → a auditoria travava até reiniciar.
-     Agora: até 4 tentativas (espera 0,8 → 1,6 → 3 s), URL única e sem cache, tempo-limite por tentativa.
-     O que pode repetir automaticamente (segurança dos dados):
-       • leituras (list, listAnexos, getFile): qualquer falha de entrega;
-       • 'save': qualquer falha de entrega — o servidor faz "atualiza ou insere" pelo nº de atendimento, então
-         repetir regrava a MESMA linha (não duplica) e o dono continua sendo quem está logado;
-       • 'upload' e demais: NUNCA — o arquivo pode já estar no Drive; a mensagem pede para conferir antes.
-     Cada tentativa fica em window.__apiDiag (últimas 30) e a mensagem final traz o código técnico. */
+  /* 2026-10-16 (partes 30–31) — ENTREGA RESILIENTE. Diagnóstico: o Apps Script executa em 0,4–5 s (Execuções:
+     tudo "Concluído"), mas a ENTREGA da resposta pelo Google (script.googleusercontent.com) às vezes demora
+     10–25 s, volta como página HTML de erro (404) ou é redirecionada como GET ao /exec (o doGet aparece DEPOIS
+     de um doPost já concluído — "virou GET" NÃO prova que o doPost deixou de rodar).
+     • LEITURAS (list, check, numeros, mine, listAnexos): pedidos em PARALELO escalonados — se o 1º não
+       responder em 7 s, sai um 2º (e um 3º), sem cancelar os anteriores; vale o primeiro que chegar.
+       Uma tentativa que falha dispara a próxima na hora. Teto total 45 s.
+     • 'save': em sequência (até 4), pois o servidor (V12) grava sob LockService e faz "atualiza ou insere"
+       pelo nº — repetir regrava a mesma linha. Após falha de REDE espera 10 s antes de repetir.
+     • 'getFile': em sequência (até 3) — arquivo grande, sem paralelo.
+     • 'upload' e demais: NUNCA repete — o arquivo pode já estar no Drive; a mensagem pede para conferir.
+     Cada tentativa fica em window.__apiDiag (últimas 30); a mensagem final traz o código técnico. */
   const token=await getIdToken();
   if(!token){ return {status:'unauthorized', message:'Sessão expirada. Faça login novamente.'}; }
   const body=JSON.stringify(Object.assign({}, payload||{}, {action:action, idToken:token}));
-  const LEITURA=(action==='list'||action==='listAnexos'||action==='getFile');
-  const REPETE=LEITURA||action==='save';
-  const MAX=REPETE?4:1, ESPERA=[0,800,1600,3000];
-  const LIMITE=LEITURA?20000:(action==='save'?30000:90000);
+  const PARALELO={list:1,check:1,numeros:1,mine:1,listAnexos:1}[action]===1;
+  if(PARALELO) return _apiLeituraParalela(action, body);
+  const REPETE=(action==='save'||action==='getFile');
+  const MAX=action==='save'?4:(action==='getFile'?3:1), ESPERA=[0,800,1600,3000];
+  const LIMITE=action==='save'?30000:(action==='getFile'?60000:90000);
   const AMBIGUO=(action==='upload')
     ? 'O Google não confirmou o envio do arquivo. Ele PODE ter sido enviado: confira a lista de anexos antes de enviar de novo.'
     : 'O Google não confirmou a operação. Confira o resultado antes de repetir.';
   let ultimo='', ultimoRede=false;
-  const diag=function(o){ try{ var d=window.__apiDiag||(window.__apiDiag=[]); o.t=new Date().toISOString(); o.acao=action; d.push(o); if(d.length>30) d.shift(); }catch(e){} };
   for(let attempt=0; attempt<MAX; attempt++){
-    // 'save' depois de falha de REDE: o pedido pode ter chegado e ainda estar gravando — espera 10 s antes de
-    // repetir, para nunca rodar dois saves ao mesmo tempo (com a trava LockService do Apps Script V12 isso fica redundante).
+    // 'save' depois de falha de REDE: o pedido pode ter chegado e ainda estar gravando — espera 10 s.
     const espera=(action==='save' && ultimoRede && attempt>0) ? Math.max(10000, ESPERA[attempt]) : ESPERA[attempt];
     if(espera) await new Promise(function(r){ setTimeout(r, espera); });
-    ultimoRede=false;
-    let resp=null, text='', host='', to=null;
-    try{
-      const ctl=(typeof AbortController==='function')?new AbortController():null;
-      if(ctl) to=setTimeout(function(){ try{ ctl.abort(); }catch(e){} }, LIMITE);
-      const url=SHEETS_WEBAPP_URL+(SHEETS_WEBAPP_URL.indexOf('?')<0?'?':'&')+'_r='+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
-      resp=await fetch(url,{ method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:body, cache:'no-store', credentials:'omit', redirect:'follow', signal:ctl?ctl.signal:undefined });
-      try{ host=new URL(resp.url).host; }catch(e){}
-      text=await resp.text();
-      if(to) clearTimeout(to);
-    }catch(e){
-      if(to) clearTimeout(to);
-      const tempo=(e&&e.name==='AbortError');
-      ultimo=tempo?('sem resposta em '+Math.round(LIMITE/1000)+' s'):('rede: '+((e&&e.message)||e));
-      ultimoRede=!tempo;
-      diag({n:attempt+1, tipo:tempo?'tempo-esgotado':'rede', erro:String((e&&e.message)||e).slice(0,120)});
-      console.warn('[API] '+ultimo+' ('+action+', tentativa '+(attempt+1)+'/'+MAX+')');
-      if(!REPETE) return {status:'error', message:tempo?AMBIGUO:'Erro de conexão.'};
-      continue;
-    }
-    let json=null;
-    try{ json=JSON.parse(text); }catch(e){ json=null; }
-    if(json && json.status && !/Use POST com idToken/i.test(String(json.message||''))){
-      if(attempt>0){ diag({n:attempt+1, tipo:'ok-apos-repetir'}); console.info('[API] '+action+' entregue na tentativa '+(attempt+1)); }
-      return json;                                            // resposta do servidor (ok, unauthorized, forbidden, error…)
-    }
-    if(json){
-      ultimo='POST virou GET no redirect · '+(host||'?');
-      diag({n:attempt+1, tipo:'get-rebaixado', host:host});
-    } else {
-      ultimo='HTTP '+resp.status+' · '+(host||'?')+' · '+(/<!DOCTYPE|<html/i.test(text)?'página de erro do Google':'resposta inválida');
-      diag({n:attempt+1, tipo:'invalida', status:resp.status, host:host, redirecionou:!!resp.redirected, inicio:String(text).slice(0,80)});
-    }
-    console.warn('[API] '+ultimo+' ('+action+', tentativa '+(attempt+1)+'/'+MAX+')');
-    if(!REPETE) return {status:'error', message:AMBIGUO+' ('+ultimo+')'};
+    const ctl=(typeof AbortController==='function')?new AbortController():null;
+    const to=ctl?setTimeout(function(){ try{ ctl.abort(); }catch(e){} }, LIMITE):null;
+    const r=await _apiUmaTentativa(action, body, ctl?ctl.signal:undefined, attempt+1, MAX);
+    if(to) clearTimeout(to);
+    if(r.json) return r.json;
+    ultimo=r.motivo; ultimoRede=!!r.rede;
+    if(!REPETE) return {status:'error', message:(r.rede?'Erro de conexão.':AMBIGUO+' ('+ultimo+')')};
   }
   return {status:'error', message:'O Google não entregou a resposta após '+MAX+' tentativas ('+ultimo+'). Aguarde alguns segundos e use "Tentar novamente".'};
+}
+function _apiDiag(o){ try{ var d=window.__apiDiag||(window.__apiDiag=[]); o.t=new Date().toISOString(); d.push(o); if(d.length>30) d.shift(); }catch(e){} }
+/* Uma tentativa: devolve {json} (resposta do servidor) ou {motivo, rede, tempo}. */
+async function _apiUmaTentativa(action, body, signal, n, max){
+  let resp=null, text='', host='';
+  try{
+    const url=SHEETS_WEBAPP_URL+(SHEETS_WEBAPP_URL.indexOf('?')<0?'?':'&')+'_r='+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+    resp=await fetch(url,{ method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:body, cache:'no-store', credentials:'omit', redirect:'follow', signal:signal });
+    try{ host=new URL(resp.url).host; }catch(e){}
+    text=await resp.text();
+  }catch(e){
+    const tempo=(e&&e.name==='AbortError');
+    const motivo=tempo?'sem resposta no tempo-limite':('rede: '+((e&&e.message)||e));
+    _apiDiag({acao:action, n:n, tipo:tempo?'tempo-esgotado':'rede', erro:String((e&&e.message)||e).slice(0,120)});
+    console.warn('[API] '+motivo+' ('+action+', tentativa '+n+'/'+max+')');
+    return {motivo:motivo, rede:!tempo, tempo:tempo};
+  }
+  let json=null; try{ json=JSON.parse(text); }catch(e){ json=null; }
+  if(json && json.status && !/Use POST com idToken/i.test(String(json.message||''))){
+    if(n>1){ _apiDiag({acao:action, n:n, tipo:'ok-apos-repetir'}); console.info('[API] '+action+' entregue na tentativa '+n); }
+    return {json:json};
+  }
+  const motivo= json ? ('POST virou GET no redirect · '+(host||'?'))
+    : ('HTTP '+resp.status+' · '+(host||'?')+' · '+(/<!DOCTYPE|<html/i.test(text)?'página de erro do Google':'resposta inválida'));
+  _apiDiag({acao:action, n:n, tipo:json?'get-rebaixado':'invalida', status:resp.status, host:host});
+  console.warn('[API] '+motivo+' ('+action+', tentativa '+n+'/'+max+')');
+  return {motivo:motivo};
+}
+/* Leituras: tentativas em paralelo escalonado (ver apiCall). */
+function _apiLeituraParalela(action, body){
+  const ESCALA=7000, LIMITE=25000, TETO=45000, MAXV=3;
+  return new Promise(function(resolve){
+    let feito=false, lancados=0, emVoo=0, ultimo='', tEsc=null;
+    const ctls=[];
+    const fim=function(r){ if(feito) return; feito=true; clearTimeout(tEsc); clearTimeout(tTeto); ctls.forEach(function(c){ try{ c.abort(); }catch(e){} }); resolve(r); };
+    const falhou=function(){ return {status:'error', message:'O Google não entregou a resposta em '+Math.round(TETO/1000)+' s ('+(ultimo||'sem resposta')+'). Aguarde alguns segundos e use "Tentar novamente".'}; };
+    const lancar=function(){
+      if(feito || lancados>=MAXV) return;
+      lancados++; emVoo++;
+      const n=lancados, ctl=(typeof AbortController==='function')?new AbortController():null;
+      if(ctl) ctls.push(ctl);
+      const to=ctl?setTimeout(function(){ try{ ctl.abort(); }catch(e){} }, LIMITE):null;
+      clearTimeout(tEsc); tEsc=setTimeout(lancar, ESCALA);          // próxima tentativa se esta demorar
+      _apiUmaTentativa(action, body, ctl?ctl.signal:undefined, n, MAXV).then(function(r){
+        if(to) clearTimeout(to); emVoo--;
+        if(feito) return;
+        if(r.json){ fim(r.json); return; }
+        ultimo=r.motivo;
+        if(lancados<MAXV){ clearTimeout(tEsc); tEsc=setTimeout(lancar, 600); }   // falhou: tenta de novo já
+        else if(emVoo===0) fim(falhou());
+      });
+    };
+    const tTeto=setTimeout(function(){ fim(falhou()); }, TETO);
+    lancar();
+  });
+}
+/* V13: consultas enxutas da planilha, com compatibilidade com o servidor antigo (cai no 'list' e filtra aqui). */
+async function apiAuditorias(acao, extra){
+  extra=extra||{};
+  const r=await apiCall(acao, extra);
+  if(r && r.status==='ok'){
+    if(acao==='numeros') return {status:'ok', rows:(r.numeros||[]).map(function(n){ return {numero_atendimento:n}; })};
+    return r;
+  }
+  if(r && r.status==='error' && /Ação desconhecida/i.test(String(r.message||''))){
+    const l=await apiCall('list');
+    if(!l || l.status!=='ok' || !Array.isArray(l.rows)) return l;
+    const tx=function(v){ return String(v==null?'':v).trim(); };
+    if(acao==='check'){ const alvo=tx(extra.numero); return {status:'ok', rows:l.rows.filter(function(x){ return tx(x.numero_atendimento)===alvo; })}; }
+    if(acao==='mine'){
+      const eu=(typeof currentUser!=='undefined' && currentUser && currentUser.name)||'';
+      const meus={}; l.rows.forEach(function(x){ if(tx(x.auditor)===eu) meus[tx(x.numero_atendimento)]=1; });
+      return {status:'ok', rows:l.rows.filter(function(x){ return meus[tx(x.numero_atendimento)]; })};
+    }
+    return l;
+  }
+  return r;
 }
 
 /* === FIREBASE CONFIG === */
