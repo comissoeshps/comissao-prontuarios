@@ -370,34 +370,73 @@ async function getIdToken(){
 }
 
 async function apiCall(action, payload){
+  /* 2026-10-16 (parte 30) — ENTREGA RESILIENTE. Diagnóstico do bloqueio frequente ("Banco de dados indisponível"):
+     o Apps Script NÃO falha — na página Execuções todo doPost aparece "Concluído" em 0,4–5 s. A falha é na ENTREGA
+     da resposta pelo Google (script.googleusercontent.com): ela às vezes demora 10–25 s, volta como página HTML de
+     erro (404) ou é redirecionada de volta ao /exec como GET (o doGet aparece 9–17 s DEPOIS de um doPost já
+     concluído). ⚠️ Logo, "POST virou GET" NÃO prova que o doPost deixou de rodar (premissa de 28/09 corrigida).
+     A versão anterior desistia na 1ª página de erro e não tinha tempo-limite → a auditoria travava até reiniciar.
+     Agora: até 4 tentativas (espera 0,8 → 1,6 → 3 s), URL única e sem cache, tempo-limite por tentativa.
+     O que pode repetir automaticamente (segurança dos dados):
+       • leituras (list, listAnexos, getFile): qualquer falha de entrega;
+       • 'save': qualquer falha de entrega — o servidor faz "atualiza ou insere" pelo nº de atendimento, então
+         repetir regrava a MESMA linha (não duplica) e o dono continua sendo quem está logado;
+       • 'upload' e demais: NUNCA — o arquivo pode já estar no Drive; a mensagem pede para conferir antes.
+     Cada tentativa fica em window.__apiDiag (últimas 30) e a mensagem final traz o código técnico. */
   const token=await getIdToken();
   if(!token){ return {status:'unauthorized', message:'Sessão expirada. Faça login novamente.'}; }
-  const body=Object.assign({}, payload||{}, {action:action, idToken:token});
-  // Navegadores sem os cookies do Google (aba anônima / 1º acesso do perfil) podem rebaixar
-  // o POST para GET ao seguir o redirect 302 do Apps Script; a resposta então vem do doGet
-  // ("Use POST com idToken. Leituras via GET foram desativadas."). Essa mensagem PROVA que o
-  // doPost NÃO executou — repetir é seguro, inclusive para gravações: nada ocorreu no servidor.
-  for(let attempt=0; attempt<3; attempt++){
-    if(attempt>0) await new Promise(function(r){ setTimeout(r, 400*attempt); });
+  const body=JSON.stringify(Object.assign({}, payload||{}, {action:action, idToken:token}));
+  const LEITURA=(action==='list'||action==='listAnexos'||action==='getFile');
+  const REPETE=LEITURA||action==='save';
+  const MAX=REPETE?4:1, ESPERA=[0,800,1600,3000];
+  const LIMITE=LEITURA?20000:(action==='save'?30000:90000);
+  const AMBIGUO=(action==='upload')
+    ? 'O Google não confirmou o envio do arquivo. Ele PODE ter sido enviado: confira a lista de anexos antes de enviar de novo.'
+    : 'O Google não confirmou a operação. Confira o resultado antes de repetir.';
+  let ultimo='', ultimoRede=false;
+  const diag=function(o){ try{ var d=window.__apiDiag||(window.__apiDiag=[]); o.t=new Date().toISOString(); o.acao=action; d.push(o); if(d.length>30) d.shift(); }catch(e){} };
+  for(let attempt=0; attempt<MAX; attempt++){
+    // 'save' depois de falha de REDE: o pedido pode ter chegado e ainda estar gravando — espera 10 s antes de
+    // repetir, para nunca rodar dois saves ao mesmo tempo (com a trava LockService do Apps Script V12 isso fica redundante).
+    const espera=(action==='save' && ultimoRede && attempt>0) ? Math.max(10000, ESPERA[attempt]) : ESPERA[attempt];
+    if(espera) await new Promise(function(r){ setTimeout(r, espera); });
+    ultimoRede=false;
+    let resp=null, text='', host='', to=null;
     try{
-      const resp=await fetch(SHEETS_WEBAPP_URL,{
-        method:'POST',
-        headers:{'Content-Type':'text/plain;charset=utf-8'},
-        body:JSON.stringify(body)
-      });
-      const text=await resp.text();
-      let json;
-      try{ json=JSON.parse(text); }
-      catch(e){ console.warn('[API] resposta não-JSON:', text.slice(0,200)); return {status:'error', message:'Resposta inválida do servidor.'}; }
-      const getDowngrade = json && json.status==='unauthorized' && /Use POST com idToken/i.test(String(json.message||''));
-      if(!getDowngrade) return json;
-      console.warn('[API] POST rebaixado para GET pelo redirect do Apps Script (tentativa '+(attempt+1)+'/3) — repetindo…');
+      const ctl=(typeof AbortController==='function')?new AbortController():null;
+      if(ctl) to=setTimeout(function(){ try{ ctl.abort(); }catch(e){} }, LIMITE);
+      const url=SHEETS_WEBAPP_URL+(SHEETS_WEBAPP_URL.indexOf('?')<0?'?':'&')+'_r='+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+      resp=await fetch(url,{ method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:body, cache:'no-store', credentials:'omit', redirect:'follow', signal:ctl?ctl.signal:undefined });
+      try{ host=new URL(resp.url).host; }catch(e){}
+      text=await resp.text();
+      if(to) clearTimeout(to);
     }catch(e){
-      console.error('[API] falha de rede:', e);
-      return {status:'error', message:'Erro de conexão.'};
+      if(to) clearTimeout(to);
+      const tempo=(e&&e.name==='AbortError');
+      ultimo=tempo?('sem resposta em '+Math.round(LIMITE/1000)+' s'):('rede: '+((e&&e.message)||e));
+      ultimoRede=!tempo;
+      diag({n:attempt+1, tipo:tempo?'tempo-esgotado':'rede', erro:String((e&&e.message)||e).slice(0,120)});
+      console.warn('[API] '+ultimo+' ('+action+', tentativa '+(attempt+1)+'/'+MAX+')');
+      if(!REPETE) return {status:'error', message:tempo?AMBIGUO:'Erro de conexão.'};
+      continue;
     }
+    let json=null;
+    try{ json=JSON.parse(text); }catch(e){ json=null; }
+    if(json && json.status && !/Use POST com idToken/i.test(String(json.message||''))){
+      if(attempt>0){ diag({n:attempt+1, tipo:'ok-apos-repetir'}); console.info('[API] '+action+' entregue na tentativa '+(attempt+1)); }
+      return json;                                            // resposta do servidor (ok, unauthorized, forbidden, error…)
+    }
+    if(json){
+      ultimo='POST virou GET no redirect · '+(host||'?');
+      diag({n:attempt+1, tipo:'get-rebaixado', host:host});
+    } else {
+      ultimo='HTTP '+resp.status+' · '+(host||'?')+' · '+(/<!DOCTYPE|<html/i.test(text)?'página de erro do Google':'resposta inválida');
+      diag({n:attempt+1, tipo:'invalida', status:resp.status, host:host, redirecionou:!!resp.redirected, inicio:String(text).slice(0,80)});
+    }
+    console.warn('[API] '+ultimo+' ('+action+', tentativa '+(attempt+1)+'/'+MAX+')');
+    if(!REPETE) return {status:'error', message:AMBIGUO+' ('+ultimo+')'};
   }
-  return {status:'error', message:'Falha de comunicação com o Google (redirect rebaixou o POST). Recarregue a página e tente novamente.'};
+  return {status:'error', message:'O Google não entregou a resposta após '+MAX+' tentativas ('+ultimo+'). Aguarde alguns segundos e use "Tentar novamente".'};
 }
 
 /* === FIREBASE CONFIG === */
