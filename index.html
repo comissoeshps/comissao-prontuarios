@@ -645,6 +645,13 @@ body.dark #hps-tour-hl.hps-tour-semalvo,body.dark #hps-tour-hl.hps-tour-iris{box
 @keyframes aaChega{0%{box-shadow:0 0 0 0 rgba(31,111,235,0)}28%{box-shadow:0 0 0 5px rgba(31,111,235,.28)}100%{box-shadow:0 0 0 0 rgba(31,111,235,0)}}
 @media (prefers-reduced-motion:reduce){ .choice.aa-tap{animation:none} .aa-chega{animation:none} }
 
+/* === NAVEGADOR EMBUTIDO EM APP (2026-10-17, parte 37) === */
+.nav-embutido{background:#FFF7E6;border:1px solid #F5D08A;border-radius:10px;padding:10px 12px;font-size:12.5px;color:#7A4B00;line-height:1.5;margin:10px 0}
+.nav-embutido .nav-acoes{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.nav-embutido .nav-btn{display:inline-flex;align-items:center;border:1.5px solid #C78A14;background:#fff;color:#7A4B00;border-radius:9px;padding:7px 12px;font-size:12.5px;font-weight:800;cursor:pointer;text-decoration:none;font-family:inherit}
+.nav-embutido input{width:100%;margin-top:8px;font-size:12px;padding:8px;border:1px solid #F5D08A;border-radius:8px}
+body.dark .nav-embutido{background:#3a2e12;color:#F5D58A;border-color:#6b5520}
+body.dark .nav-embutido .nav-btn{background:#2a2110;color:#F5D58A;border-color:#a07a2a}
 /* === AVISO DE VERSÃO NOVA (2026-10-16, parte 33) === */
 #verAviso{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:10010;width:min(560px,calc(100vw - 24px));background:var(--navy);color:#fff;border-radius:14px;box-shadow:0 12px 32px rgba(12,32,58,.35);padding:14px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-family:'DM Sans',sans-serif;animation:verEntra .3s ease-out}
 body.dark #verAviso{background:#1F6FEB}
@@ -832,6 +839,7 @@ body.dark #verAviso{background:#1F6FEB}
         <select id="cvtSetor" onchange="document.getElementById('cvtSetorOutro').style.display=this.value==='__outro__'?'block':'none'" style="width:100%;border:1.5px solid var(--line);border-radius:10px;padding:11px 12px;font-family:inherit;font-size:14px;background:var(--card);color:var(--ink)"></select>
         <input id="cvtSetorOutro" type="text" maxlength="120" placeholder="Escreva o nome do setor" style="display:none;margin-top:8px">
       </div>
+      <div id="navAvisoConvite"></div>
       <button type="button" id="btnGoogleConvite" onclick="entrarComGoogle('convite')" style="width:100%;display:flex;align-items:center;justify-content:center;gap:10px;border:none;background:var(--blue);border-radius:12px;padding:12px 14px;font-size:14px;font-weight:800;cursor:pointer;color:#fff;font-family:'DM Sans',sans-serif;margin-top:6px">
         <span style="background:#fff;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center"><svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg></span>
         Continuar com Google
@@ -864,6 +872,7 @@ body.dark #verAviso{background:#1F6FEB}
       <div class="login-field"><label>Senha</label><div class="pw-wrap"><input id="loginPass" type="password" placeholder="••••••••" onkeydown="tryLoginKey(event)" autocomplete="current-password"><button type="button" class="pw-eye" data-for="loginPass" title="Mostrar senha" onclick="togglePw('loginPass',this)">👁</button></div></div>
       <button class="login-btn" onclick="tryLogin()">Entrar</button>
       <div style="display:flex;align-items:center;gap:10px;margin:14px 0 10px;color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.06em"><span style="flex:1;height:1px;background:var(--line)"></span>OU<span style="flex:1;height:1px;background:var(--line)"></span></div>
+      <div id="navAvisoLogin"></div>
       <button type="button" id="btnGoogle" onclick="entrarComGoogle()" style="width:100%;display:flex;align-items:center;justify-content:center;gap:10px;border:1.5px solid var(--line);background:#fff;border-radius:12px;padding:11px 14px;font-size:14px;font-weight:700;cursor:pointer;color:#3c4043;font-family:'DM Sans',sans-serif">
         <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
         Entrar com Google
@@ -2210,6 +2219,89 @@ function nomeConfere(digitado, oficial){
   var a=nomeChave(digitado), b=nomeChave(oficial);
   return !!(a && b && a.n>=2 && a.primeiro===b.primeiro && a.ultimo===b.ultimo);
 }
+/* === NAVEGADOR: identificação para o login com Google (2026-10-17, parte 37) ======================
+   • iPhone/iPad: TODOS os navegadores usam o motor do Safari (mesma rigidez com pop-ups) → orientação
+     específica de cada um (Safari, Chrome, Firefox, Edge).
+   • Navegadores embutidos em apps (Instagram, Facebook, LinkedIn, TikTok…; Android "; wv)"; iOS WKWebView sem
+     "Safari/"): o Google RECUSA o login (403 disallowed_useragent). A página avisa ANTES de tentar, oferece
+     copiar o link (com o convite, se houver) e, no Android, abrir direto no Chrome. Usuário e senha funcionam. */
+function navInfo(){
+  var ua=navigator.userAgent||'';
+  var ios=/iPhone|iPad|iPod/.test(ua) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+  var android=/Android/.test(ua), mac=!ios && /Macintosh/.test(ua);
+  var app='';
+  if(/Instagram/i.test(ua)) app='Instagram';
+  else if(/FBAN|FBAV|FB_IAB|FBIOS|FB4A/.test(ua)) app=/Messenger/i.test(ua)?'Messenger':'Facebook';
+  else if(/LinkedInApp/i.test(ua)) app='LinkedIn';
+  else if(/musical_ly|BytedanceWebview|TikTok/i.test(ua)) app='TikTok';
+  else if(/Snapchat/i.test(ua)) app='Snapchat';
+  else if(/ Line\//.test(ua)) app='LINE';
+  else if(/Twitter/i.test(ua)) app='X (Twitter)';
+  else if(/WhatsApp/i.test(ua)) app='WhatsApp';
+  else if(/Telegram/i.test(ua)) app='Telegram';
+  else if(android && /; wv\)/.test(ua)) app='aplicativo';
+  else if(ios && !/Safari\//.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS|GSA\//.test(ua)) app='aplicativo';
+  var nome='navegador';
+  if(/GSA\//.test(ua)) nome='app do Google';
+  else if(/EdgiOS|EdgA\/|Edg\//.test(ua)) nome='Edge';
+  else if(/SamsungBrowser/.test(ua)) nome='Samsung Internet';
+  else if(/FxiOS|Firefox\//.test(ua)) nome='Firefox';
+  else if(/OPiOS|OPR\//.test(ua)) nome='Opera';
+  else if(/CriOS|Chrome\//.test(ua)) nome='Chrome';
+  else if(/Safari\//.test(ua)) nome='Safari';
+  var toque=(navigator.maxTouchPoints||0)>0 && (ios||android);
+  return {ios:ios, android:android, mac:mac, app:app, nome:nome, verbo:toque?'Toque':'Clique'};
+}
+function navPopupDica(){
+  var n=navInfo();
+  if(n.ios){
+    if(n.nome==='app do Google') return 'toque em ⋯ e escolha "Abrir no Safari", e entre por lá.';
+    if(n.nome==='Chrome') return 'no Chrome do iPhone, toque em ⋯ → Configurações → Configurações de conteúdo → Bloquear pop-ups → desative.';
+    if(n.nome==='Firefox') return 'no Firefox do iPhone, toque em ☰ → Configurações → desative "Bloquear janelas pop-up".';
+    if(n.nome==='Edge') return 'no Edge do iPhone, toque em ⋯ → Configurações → Privacidade e segurança → Bloquear pop-ups → desative.';
+    return 'Ajustes do iPhone → Safari → desative "Bloquear Pop-ups".';
+  }
+  if(n.android){
+    if(n.nome==='Samsung Internet') return 'no Samsung Internet, toque em ☰ → Configurações → Sites e downloads → desative "Bloquear pop-ups".';
+    if(n.nome==='Firefox') return 'no Firefox, toque no aviso de pop-up bloqueado e permita para este site.';
+    return 'no Chrome, toque no aviso "Pop-up bloqueado" e escolha "Sempre mostrar", ou ⋮ → Configurações → Configurações do site → Pop-ups e redirecionamentos → permita.';
+  }
+  if(n.mac && n.nome==='Safari') return 'no Safari do Mac, menu Safari → Ajustes → Sites → Janelas Pop-up → comissoeshps.github.io → Permitir.';
+  return 'clique no ícone de pop-up bloqueado na barra de endereço e escolha "Sempre permitir" para este site.';
+}
+function navLinkAtual(){
+  var code=''; try{ code=sessionStorage.getItem(CONVITE_KEY)||''; }catch(e){}
+  return code ? conviteLink(code) : (location.origin+location.pathname);
+}
+function navIntentChrome(){
+  var u=navLinkAtual();
+  return 'intent://'+u.replace(/^https?:\/\//,'')+'#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url='+encodeURIComponent(u)+';end';
+}
+function navCopiarLink(btn){
+  var u=navLinkAtual();
+  var mostrar=function(){ var box=btn&&btn.closest('.nav-embutido'); if(!box) return; var i=box.querySelector('input'); if(!i){ i=document.createElement('input'); i.readOnly=true; box.appendChild(i); } i.value=u; i.focus(); i.select(); };
+  try{
+    navigator.clipboard.writeText(u).then(function(){ if(btn) btn.textContent='Link copiado ✔ — cole no '+(navInfo().ios?'Safari':'Chrome'); }, mostrar);
+  }catch(e){ mostrar(); }
+}
+function navEmbutidoHtml(retry, ctx){
+  var n=navInfo(); if(!n.app) return '';
+  var onde=n.ios?'no Safari':'no Chrome';
+  var como=n.ios?'toque em <b>⋯</b> (ou no ícone de compartilhar) e escolha <b>Abrir no Safari</b> / <b>Abrir no navegador</b>'
+                :'toque em <b>⋮</b> e escolha <b>Abrir no Chrome</b> / <b>Abrir no navegador</b>';
+  return '<div class="nav-embutido">⚠️ Você abriu a plataforma dentro do '+(n.app==='aplicativo'?'navegador de um <b>aplicativo</b>':'<b>'+escapeHtml(n.app)+'</b>')+'. '
+    +'O Google <b>não permite</b> entrar com a conta Google dentro de aplicativos. Abra '+onde+': '+como+'.'
+    +'<div class="nav-acoes"><button type="button" class="nav-btn" onclick="navCopiarLink(this)">Copiar link</button>'
+    +(n.android?'<a class="nav-btn" href="'+escapeHtml(navIntentChrome())+'">Abrir no Chrome</a>':'')
+    +(retry?'<button type="button" class="nav-btn" onclick="_navForcarGoogle=true;entrarComGoogle('+(retry==='convite'?"'convite'":'')+')">Tentar mesmo assim</button>':'')
+    +'</div>'+(ctx==='convite'?'':'<div style="font-size:11.5px;margin-top:6px">Usuário e senha funcionam normalmente aqui.</div>')+'</div>';
+}
+var _navForcarGoogle=false;
+function navAvisosRender(){
+  var a=document.getElementById('navAvisoLogin'); if(a) a.innerHTML=navEmbutidoHtml('', 'login');
+  var c=document.getElementById('navAvisoConvite'); if(c) c.innerHTML=navEmbutidoHtml('', 'convite');
+}
+(function(){ var f=function(){ try{ navAvisosRender(); }catch(e){} }; if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',f); else setTimeout(f,0); })();
 function googleProvider(){ var p=new firebase.auth.GoogleAuthProvider(); p.setCustomParameters({prompt:'select_account'}); return p; }
 function temSenha(u){ return !!(u && (u.providerData||[]).some(function(p){ return p && p.providerId==='password'; })); }
 function googleInfo(u){ return (u && (u.providerData||[]).find(function(p){ return p && p.providerId==='google.com'; })) || null; }
@@ -2221,12 +2313,12 @@ function msgErroGoogle(e){
   var c=(e&&e.code)||'';
   if(c==='auth/popup-closed-by-user' || c==='auth/cancelled-popup-request') return '';
   if(c==='auth/popup-blocked'){
-    var ios=/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
-    var safari=/Safari/.test(navigator.userAgent) && !/Chrome|CriOS|FxiOS|EdgiOS/.test(navigator.userAgent);
-    return (ios||safari)
-      ? 'O Safari segurou a janela do Google. Toque de novo em "Entrar com Google" — na 2ª vez ela abre. Se ainda assim não abrir: Ajustes do iPhone → Safari → desative "Bloquear Pop-ups" e tente de novo.'
-      : 'O navegador bloqueou a janela do Google. Clique de novo em "Entrar com Google"; se não abrir, permita pop-ups para este site.';
+    var n=navInfo();
+    if(n.app) return 'Você está dentro do '+n.app+', que não deixa abrir a janela do Google. Abra a plataforma '+(n.ios?'no Safari':'no Chrome')+' (veja o aviso acima) ou entre com usuário e senha.';
+    return 'O '+n.nome+' segurou a janela do Google. '+n.verbo+' de novo em "Entrar com Google" — na 2ª vez costuma abrir. Se ainda assim não abrir: '+navPopupDica();
   }
+  if(c==='auth/operation-not-supported-in-this-environment' || c==='auth/web-storage-unsupported')
+    return 'Este navegador não permite o login com Google (armazenamento bloqueado ou navegador de aplicativo). Abra a plataforma no '+(navInfo().ios?'Safari':'Chrome')+' comum ou entre com usuário e senha.';
   if(c==='auth/unauthorized-domain') return 'Este endereço ainda não está autorizado para login com Google. Avise a presidência.';
   if(c==='auth/operation-not-allowed') return 'O login com Google ainda não foi ativado. Avise a presidência.';
   if(c==='auth/network-request-failed') return 'Sem conexão. Verifique a internet e tente de novo.';
@@ -2271,6 +2363,8 @@ async function entrarComGoogle(origem){
     if(!nomeChave(nomeDig) || nomeChave(nomeDig).n<2){ if(err) err.textContent='Informe seu nome completo (nome e sobrenome).'; return; }
     if(!setorDig){ if(err) err.textContent='Escolha o setor em que você trabalha.'; return; }
   }
+  if(navInfo().app && !_navForcarGoogle){ if(err) err.innerHTML=navEmbutidoHtml(modoConvite?'convite':'login', modoConvite?'convite':'login'); return; }   // parte 37
+  _navForcarGoogle=false;
   initFirebase();
   if(!fbAuth){ if(err) err.textContent='Serviço indisponível. Recarregue a página.'; return; }
   var code=''; try{ code=sessionStorage.getItem(CONVITE_KEY)||''; }catch(e){}
@@ -2420,6 +2514,8 @@ async function googleVincular(){
   try{
     initFirebase();
     if(!fbAuth || !fbAuth.currentUser) throw {message:'Sessão expirada. Entre de novo.'};
+    var _ni=navInfo();
+    if(_ni.app){ googleBoxRender('Você está dentro do '+(_ni.app==='aplicativo'?'navegador de um aplicativo':_ni.app)+', onde o Google não permite vincular contas. Abra a plataforma '+(_ni.ios?'no Safari':'no Chrome')+' e vincule por lá.', false); return; }
     await fbAuth.currentUser.linkWithPopup(googleProvider());
     googleBoxRender('✔ Conta Google vinculada. Da próxima vez, use "Entrar com Google".', true);
   }catch(e){
