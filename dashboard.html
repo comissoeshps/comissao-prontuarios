@@ -825,6 +825,27 @@ function rowToRecord(row){
 
 // Auditores cujos registros NÃO entram nas estatísticas (continuam podendo auditar normalmente)
 const AUDITORES_EXCLUIDOS=['Rafael de Mello Leão'];
+/* parte 35: base das auditorias — Firebase (auditorias + auditorias_extra) quando o presidente ligou
+   config_plataforma/auditorias_firebase; senão a planilha (Apps Script 'list'). Mesmo formato de linha. */
+async function auditoriasLinhas(){
+  var fb=false;
+  try{
+    initFirebase(); await waitForAuth();
+    var c=await Promise.race([fbDB.ref('config_plataforma/auditorias_firebase').once('value'), new Promise(function(_,rej){ setTimeout(function(){ rej(new Error('config')); }, 8000); })]);
+    fb=(c.val()===true);
+  }catch(e){ fb=false; }
+  if(!fb) return apiCall('list');
+  try{
+    var to=function(p){ return Promise.race([p, new Promise(function(_,rej){ setTimeout(function(){ rej(new Error('o Firebase não respondeu em 30 s')); }, 30000); })]); };
+    var sv=await Promise.all([to(fbDB.ref('auditorias').once('value')), to(fbDB.ref('auditorias_extra').once('value'))]);
+    var rows=[];
+    [sv[0].val()||{}, sv[1].val()||{}].forEach(function(o){ Object.keys(o).forEach(function(k){ if(o[k]) rows.push(o[k]); }); });
+    return {status:'ok', rows:rows};
+  }catch(e){
+    var den=!!e && (e.code==='PERMISSION_DENIED' || /permission[_ ]denied/i.test(String(e.message||'')));
+    return {status:'error', message: den ? 'Sem permissão para ler a base completa de auditorias (só presidente, vice e secretário(a), ou membros com "Resultados para membros efetivos" ligado).' : String((e&&e.message)||e)};
+  }
+}
 async function loadFromSheets(){
   sheetsLoadError=null;
   if(!SHEETS_WEBAPP_URL||SHEETS_WEBAPP_URL==='COLE_AQUI_A_URL_DO_SEU_APPS_SCRIPT'){
@@ -833,7 +854,7 @@ async function loadFromSheets(){
     return;
   }
   try{
-    const json=await apiCall('list');
+    const json=await auditoriasLinhas();
     if(json.status==='ok'&&Array.isArray(json.rows)){
       data=json.rows.map(rowToRecord).filter(function(r){return AUDITORES_EXCLUIDOS.indexOf(String(r.auditor||'').trim())===-1;});
     }else{
@@ -1920,7 +1941,7 @@ async function renderAuditoresPanel(online){
   // Buscar atividade de hoje
   let atividadeHoje={};
   try{
-    const json=await apiCall('list');
+    const json=await auditoriasLinhas();
     if(json.status==='ok' && json.rows){
       const agora=new Date(new Date().toLocaleString('en-US',{timeZone:'America/Sao_Paulo'}));
       const hojeStr=agora.getFullYear()+'-'+String(agora.getMonth()+1).padStart(2,'0')+'-'+String(agora.getDate()).padStart(2,'0');

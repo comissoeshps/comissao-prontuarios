@@ -1529,6 +1529,7 @@ function _apiLeituraParalela(action, body, canal){
 /* V13: consultas enxutas da planilha, com compatibilidade com o servidor antigo (cai no 'list' e filtra aqui). */
 async function apiAuditorias(acao, extra){
   extra=extra||{};
+  if((acao==='check'||acao==='numeros'||acao==='mine') && await audFirebaseAtivo()) return audFirebase(acao, extra);   // parte 35
   const r=await apiCall(acao, extra);
   if(r && r.status==='ok'){
     if(acao==='numeros') return {status:'ok', rows:(r.numeros||[]).map(function(n){ return {numero_atendimento:n}; })};
@@ -1901,6 +1902,20 @@ function membrosAdminRender(){
       +'<div style="font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.5">Use <b>depois</b> de subir o index.html novo. Só quem estiver com uma versão anterior aberta recebe o aviso; a página atualiza em 60 s e a auditoria em andamento volta sozinha. Nenhuma verificação automática roda nos computadores.</div></div>';
   })();
   setTimeout(verNoArCarregar, 0);
+  (function(){
+    var on=CFG_PLAT.auditorias_firebase===true;
+    h+='<div style="margin-top:16px;padding-top:12px;border-top:1px dashed var(--line)">'
+      +'<div style="font-weight:800;color:var(--navy);margin-bottom:6px">🗄️ Banco das auditorias</div>'
+      +'<div style="font-size:12px;color:var(--ink);line-height:1.6">Banco principal agora: <b>'+(on?'Firebase (rápido) — a planilha recebe cópia de cada salvamento':'Planilha (Apps Script)')+'</b></div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">'
+      +'<button class="secondary" style="padding:6px 12px" onclick="audMigrar()">1. Copiar planilha → Firebase</button>'
+      +(on?'<button class="secondary" style="padding:6px 12px" onclick="audAtivar(false)">Voltar para a planilha</button>'
+          :'<button class="primary" style="padding:6px 12px" onclick="audAtivar(true)">2. Ligar o Firebase como banco principal</button>')
+      +'<button class="secondary" style="padding:6px 12px" onclick="audExportarCSV()">Baixar CSV do Firebase</button>'
+      +'</div>'
+      +'<div id="audMigMsg" style="font-size:12px;margin-top:8px;line-height:1.6">'+_audMigTexto+'</div>'
+      +'<div style="font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.5">A cópia só acrescenta o que ainda não está no Firebase (pode repetir) e confere campo a campo. Ligue o Firebase logo depois da cópia, num momento sem auditorias em andamento.</div></div>';
+  })();
   if(!logins.length){ h+='<div id="membrosAdminMsg" style="font-size:12px;margin-top:10px;min-height:16px"></div></div>'; box.innerHTML=h; return; } // sem "Adicionar" antes de importar
   h+='<div style="margin-top:16px;padding-top:12px;border-top:1px dashed var(--line)">';
   h+='<div style="font-weight:800;color:var(--navy);margin-bottom:6px">🎟️ Convidar membro (entra com a conta Google)</div>';
@@ -2583,7 +2598,7 @@ window.addEventListener('load',function(){ try{ conviteRotear(); }catch(e){} });
    Firebase: config_plataforma/resultados_auditores (bool). Leitura: autorizados; escrita: só owner.
    Ausente ou ilegível = visível (comportamento anterior). É controle de INTERFACE,
    não de acesso a dados (a base continua acessível pelo Apps Script a qualquer autorizado). */
-var CFG_PLAT={resultados_auditores:false, excluidos:{}, aviso_versao:null};
+var CFG_PLAT={resultados_auditores:false, excluidos:{}, aviso_versao:null, auditorias_firebase:false};
 var _cfgPlatRef=null;
 /* 2026-10-14: Resultados — diretoria (presidente, vice, secretário) sempre vê;
    membro efetivo só vê se o presidente ligar "Resultados para membros efetivos" (padrão: DESLIGADO).
@@ -2616,15 +2631,18 @@ function cfgPlatCarregar(){
       CFG_PLAT.resultados_auditores = (v.resultados_auditores===true);
       CFG_PLAT.excluidos = (v.excluidos && typeof v.excluidos==='object') ? v.excluidos : {};
       CFG_PLAT.aviso_versao = (v.aviso_versao && typeof v.aviso_versao==='object') ? v.aviso_versao : null;
+      CFG_PLAT.auditorias_firebase = (v.auditorias_firebase===true);
+      _cfgPlatOk=true; _cfgPlatSinalizar();
       abasAplicar();
       try{ verAvaliarAviso(CFG_PLAT.aviso_versao); }catch(e){}
       if(_membrosAdminAberto) membrosAdminRender();
-    }, function(err){ console.warn('[config_plataforma] usando padrão (visível):', err && err.message); });
+    }, function(err){ console.warn('[config_plataforma] usando padrão (visível):', err && err.message); _cfgPlatRef=null; _cfgPlatSinalizar(); });
   }catch(e){}
 }
 function cfgPlatDesligar(){
   if(_cfgPlatRef){ try{ _cfgPlatRef.off(); }catch(e){} _cfgPlatRef=null; }
-  CFG_PLAT={resultados_auditores:false, excluidos:{}, aviso_versao:null};
+  CFG_PLAT={resultados_auditores:false, excluidos:{}, aviso_versao:null, auditorias_firebase:false};
+  try{ _cfgPlatReiniciar(); }catch(e){}
 }
 async function cfgPlatSalvar(){
   try{
@@ -2635,6 +2653,291 @@ async function cfgPlatSalvar(){
     CFG_PLAT.resultados_auditores=on; abasAplicar();
     mMsg('✔ Aba Resultados '+(on?'visível':'oculta')+' para os membros efetivos.',true);
   }catch(e){ mMsg('Erro ao salvar: '+(mIsPermDenied(e)?'permissão negada (a regra config_plataforma já foi publicada no Firebase?)':(e.message||e)),false); }
+}
+
+/* === AUDITORIAS NO FIREBASE (2026-10-17, parte 35) ===========================================
+   Banco principal das auditorias = Firebase RTDB quando config_plataforma/auditorias_firebase === true
+   (o presidente liga depois de copiar a planilha). Desligado = caminho antigo (Apps Script/planilha).
+     auditorias/<nº>        = linha da auditoria (as mesmas 59 colunas da planilha) + login, criadoEm, salvoEm
+     auditorias_extra/x…    = linhas repetidas do modelo antigo (só estatística; presidente/diretoria)
+     auditados/<nº>         = {a:auditor, l:login, c:completa, r:respondidos, t:total, d:data, tp:tipo}
+                              → qualquer membro lê UM nº (bloqueio de duplicidade SEM ver as respostas)
+     auditados_num/<nº>     = true (lista de nºs para o seletor automático)
+   Regras v32: o auditor lê só as suas; presidente/vice/secretário(a) leem tudo; membro efetivo lê a base
+   só com "Resultados para membros efetivos" ligado (a aba Resultados precisa dela). Grava só o próprio
+   auditor (nome oficial de membros/<login>, hora do servidor), nunca sobre auditoria de outro; o presidente
+   pode tudo. A planilha recebe uma CÓPIA (espelho, action 'save' com espelho:true) sem travar o auditor. */
+var AUD_COLS=['id','data_auditoria','numero_atendimento','setor_auditado','tipo_internacao','auditor','dias_internacao','desfecho','conformidade_geral_pct',
+  'item_1','item_2','item_3','item_4','item_5','item_6','item_7','item_8','item_9','item_10','item_11','item_12','item_13','item_14','item_15','item_16','item_17','item_18','item_19','item_20',
+  'fis_item_1','fis_item_2','fis_item_3','fis_item_4','fis_item_5','fis_item_6','fis_item_7','fis_item_8','fis_item_9','fis_item_10','fis_item_11','fis_item_12','fis_item_13','fis_item_14','fis_item_15','fis_item_16','fis_item_17',
+  'fisio_presenca','fisio_metas','nutri_presenca','nutri_aval48h','nutri_reaval','fono_presenca','fono_deglut','farma_presenca','farma_interacao','farma_reconcil',
+  'tipo_prontuario','observacoes','setores_itens'];
+var AUD_ANON='Auditoria anônima (modelo antigo)';
+var AUD_KEY_RE=/^[0-9A-Za-z_-]{1,40}$/;
+var _cfgPlatOk=false, _cfgPlatResolver=null, _cfgPlatPromessa=new Promise(function(r){ _cfgPlatResolver=r; });
+function _cfgPlatSinalizar(){ if(_cfgPlatResolver){ var f=_cfgPlatResolver; _cfgPlatResolver=null; f(); } }
+function _cfgPlatReiniciar(){ _cfgPlatOk=false; _cfgPlatPromessa=new Promise(function(r){ _cfgPlatResolver=r; }); }
+function _audTeto(p, ms, msg){ var t; return Promise.race([p, new Promise(function(_,rej){ t=setTimeout(function(){ rej(new Error(msg||'tempo esgotado')); }, ms); })]).finally(function(){ clearTimeout(t); }); }
+async function audFirebaseAtivo(){
+  try{ cfgPlatCarregar(); }catch(e){}
+  try{ await _audTeto(_cfgPlatPromessa, 6000); }catch(e){}
+  if(_cfgPlatOk) return CFG_PLAT.auditorias_firebase===true;
+  try{
+    initFirebase(); await waitForAuth();
+    var s=await _audTeto(fbDB.ref('config_plataforma/auditorias_firebase').once('value'), 8000, 'config');
+    CFG_PLAT.auditorias_firebase=(s.val()===true); return CFG_PLAT.auditorias_firebase;
+  }catch(e){ console.warn('[auditorias] config indisponível — usando a planilha:', e && e.message); return false; }
+}
+function _audLimpo(row){
+  var o={};
+  AUD_COLS.forEach(function(h){
+    var v=row?row[h]:'';
+    if(v===undefined||v===null||(typeof v==='number'&&!isFinite(v))) v='';
+    if(typeof v==='object') v=String(v);
+    o[h]=v;
+  });
+  return o;
+}
+function _audMeta(rec){
+  var st=statusAuditoriaLinha(rec);
+  return {a:String(rec.auditor||'').slice(0,120), l:String(rec.login||'').slice(0,30), c:!!st.completo, r:st.respondidos, t:st.total,
+          d:String(rec.data_auditoria==null?'':rec.data_auditoria).slice(0,40), tp:String(rec.tipo_prontuario||'online').slice(0,10)};
+}
+/* Mesma mescla do servidor (saveAuditoria): itens — vale o novo se for Sim/Não/N/A, senão mantém o antigo;
+   demais colunas — vale o novo se não vazio, senão o antigo. */
+function _audMesclar(ex,row){
+  var out={}, validas=['Sim','Não','N/A'];
+  AUD_COLS.forEach(function(h){
+    var nv=row[h], ov=ex?ex[h]:undefined;
+    var isItem=/^(item_|fis_item_|fisio_|nutri_|fono_|farma_)/.test(h);
+    if(isItem){
+      if(nv!==undefined && nv!=='' && validas.indexOf(String(nv))>=0){ out[h]=nv; return; }
+      if((nv===undefined||nv==='') && ov!==undefined && ov!==null && ov!==''){ out[h]=ov; return; }
+      out[h]=(nv!==undefined&&nv!==null)?nv:''; return;
+    }
+    if(nv!==undefined && nv!==null && nv!==''){ out[h]=nv; return; }
+    out[h]=(ov===undefined||ov===null)?'':ov;
+  });
+  return _audLimpo(out);
+}
+async function audFbCheck(num){
+  num=String(num==null?'':num).trim();
+  if(!AUD_KEY_RE.test(num)) return {status:'invalido', message:'Número de atendimento inválido: use apenas números (sem espaços, pontos ou barras).'};
+  initFirebase(); await waitForAuth();
+  try{
+    var s=await _audTeto(fbDB.ref('auditorias/'+num).once('value'), 15000, 'o Firebase não respondeu em 15 s');
+    var v=s.val(); if(v) return {status:'ok', rows:[v]};
+  }catch(e){ if(!mIsPermDenied(e)) return {status:'error', message:String((e&&e.message)||e)}; }
+  try{
+    var s2=await _audTeto(fbDB.ref('auditados/'+num).once('value'), 15000, 'o Firebase não respondeu em 15 s');
+    var m=s2.val();
+    if(!m) return {status:'ok', rows:[]};
+    return {status:'ok', rows:[{numero_atendimento:num, auditor:m.a||'', data_auditoria:m.d||'', tipo_prontuario:m.tp||'online', _meta:m}]};
+  }catch(e){ return {status:'error', message:mIsPermDenied(e)?'sem permissão para consultar o índice (regras v32 publicadas?)':String((e&&e.message)||e)}; }
+}
+async function audFbNumeros(){
+  initFirebase(); await waitForAuth();
+  try{
+    var s=await _audTeto(fbDB.ref('auditados_num').once('value'), 20000, 'o Firebase não respondeu em 20 s');
+    var o=s.val()||{}, rows=[];
+    Object.keys(o).forEach(function(k){ if(o[k]) rows.push({numero_atendimento:k}); });
+    return {status:'ok', rows:rows};
+  }catch(e){ return {status:'error', message:String((e&&e.message)||e)}; }
+}
+async function audFbMinhas(){
+  initFirebase(); await waitForAuth();
+  if(!currentUser||!currentUser.login) return {status:'unauthorized', message:'sessão expirada'};
+  try{
+    var s=await _audTeto(fbDB.ref('auditorias').orderByChild('login').equalTo(String(currentUser.login)).once('value'), 20000, 'o Firebase não respondeu em 20 s');
+    var o=s.val()||{}, rows=[];
+    Object.keys(o).forEach(function(k){ if(o[k]) rows.push(o[k]); });
+    return {status:'ok', rows:rows};
+  }catch(e){ return {status:'error', message:String((e&&e.message)||e)}; }
+}
+async function audFirebase(acao, extra){
+  if(acao==='check') return audFbCheck((extra||{}).numero);
+  if(acao==='numeros') return audFbNumeros();
+  if(acao==='mine') return audFbMinhas();
+  return {status:'error', message:'ação sem suporte no Firebase: '+acao};
+}
+function _audEspelhar(row){
+  try{
+    apiCall('save', Object.assign({}, row, {espelho:true})).then(function(r){
+      if(!r||r.status!=='ok') console.warn('[espelho planilha] não confirmado:', r&&r.message);
+      else console.info('[espelho planilha] ok');
+    }).catch(function(e){ console.warn('[espelho planilha]', e); });
+  }catch(e){}
+}
+async function audFbSalvar(record){
+  try{
+    initFirebase(); var u=await waitForAuth();
+    if(!u||!currentUser) return {status:'unauthorized', message:'sessão expirada'};
+    var row=recordToRow(record);
+    var num=String(row.numero_atendimento==null?'':row.numero_atendimento).trim();
+    if(!AUD_KEY_RE.test(num)) return {status:'error', message:'Número de atendimento inválido — use apenas números (sem espaços, pontos ou barras).'};
+    row.numero_atendimento=num;
+    var login=String(currentUser.login||'');
+    var nome='';
+    try{ var sn=await _audTeto(fbDB.ref('membros/'+login+'/nome').once('value'), 15000, 'o Firebase não respondeu'); nome=String(sn.val()||''); }catch(e){}
+    if(!nome) return {status:'error', message:'Seu nome oficial não foi encontrado no cadastro de membros. Avise o presidente.'};
+    var ex=null;
+    try{ var s=await _audTeto(fbDB.ref('auditorias/'+num).once('value'), 15000, 'o Firebase não respondeu em 15 s'); ex=s.val(); }
+    catch(e){
+      if(!mIsPermDenied(e)) throw e;
+      var m=null; try{ m=(await _audTeto(fbDB.ref('auditados/'+num).once('value'), 15000)).val(); }catch(e2){}
+      if(m) return {status:'forbidden', message:'Este atendimento já foi auditado por '+(m.a||'outro auditor')+'. Só o presidente pode alterá-lo.'};
+    }
+    if(ex && !isAdmin()){
+      if(!ex.login) return {status:'forbidden', message:'Este atendimento já consta da base (auditoria do modelo antigo). Só o presidente pode alterá-lo.'};
+      if(ex.login!==login) return {status:'forbidden', message:'Este atendimento já foi auditado por '+(ex.auditor||'outro auditor')+'. Só o presidente pode alterá-lo.'};
+    }
+    var out=_audMesclar(ex,row);
+    out.auditor=nome; out.login=login;              // autoria pela sessão (como o servidor fazia)
+    out.numero_atendimento=num;
+    // DATA (mesma regra do servidor): nova → a enviada (hoje com hora); continuação → mantém a original salvo troca explícita
+    var agora=fmtSaoPaulo(relogioAgora(), true), hoje=agora.slice(0,10);
+    var env=String(row.data_auditoria==null?'':row.data_auditoria).trim();
+    var diaEnv=/^\d{4}-\d{2}-\d{2}( \d{2}:\d{2})?$/.test(env)?env.slice(0,10):'';
+    var envValida=!!diaEnv && diaEnv>='2024-01-01' && diaEnv<=hoje;
+    var envGravar=envValida?(diaEnv===hoje?agora:diaEnv):'';
+    if(!ex){ out.data_auditoria=envGravar||agora; }
+    else {
+      var orig=ex.data_auditoria, origVazia=(orig===''||orig==null);
+      var origDia=origVazia?'':dataParaInput(orig);
+      if(envValida && diaEnv!==origDia) out.data_auditoria=envGravar;
+      else out.data_auditoria=origVazia?(envGravar||agora):String(orig);
+    }
+    out.criadoEm=(ex && typeof ex.criadoEm==='number')?ex.criadoEm:firebase.database.ServerValue.TIMESTAMP;
+    out.salvoEm=firebase.database.ServerValue.TIMESTAMP;
+    if(ex && ex.migrado===true) out.migrado=true;
+    var upd={};
+    upd['auditorias/'+num]=out; upd['auditados/'+num]=_audMeta(out); upd['auditados_num/'+num]=true;
+    await _audTeto(fbDB.ref().update(upd), 30000, 'o Firebase não confirmou a gravação em 30 s (conexão?). Se a conexão voltar com esta aba aberta, a gravação é concluída sozinha — confira em "Ver meu perfil" antes de repetir');
+    try{ autoSelAudCache=null; }catch(e){}
+    _audEspelhar(row);
+    return {status:'ok', action:ex?'updated':'inserted'};
+  }catch(e){
+    if(mIsPermDenied(e)) return {status:'forbidden', message:'O Firebase recusou a gravação (permissão). Se o atendimento é seu, recarregue a página e salve de novo; senão, ele pertence a outro auditor.'};
+    return {status:'error', message:String((e&&e.message)||e)};
+  }
+}
+
+/* ---- Ferramentas do presidente: copiar planilha → Firebase, ligar/desligar, exportar CSV ---- */
+var _audMigTexto='';
+function _audMigSay(t){ _audMigTexto=t; var el=document.getElementById('audMigMsg'); if(el) el.innerHTML=t; }
+function _audHash(s){ var h1=5381, h2=52711; for(var i=0;i<s.length;i++){ var c=s.charCodeAt(i); h1=(Math.imul(h1,33)^c)|0; h2=(Math.imul(h2,31)^c)|0; } return ((h1>>>0).toString(36)+(h2>>>0).toString(36)).slice(0,14); }
+function _audNomeKey(s){ return String(s||'').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' '); }
+function _audIgual(a,b){ return String(a==null?'':a).trim()===String(b==null?'':b).trim(); }
+async function audMigrar(){
+  if(!currentUser || currentUser.login!==OWNER_LOGIN) return;
+  if(!confirm('Copiar as auditorias da PLANILHA para o FIREBASE?\n\n• Só entram os atendimentos que ainda NÃO estão no Firebase (pode repetir sem duplicar).\n• Nada é apagado nem alterado na planilha.\n• Ao final, cada linha copiada é conferida campo a campo.')) return;
+  try{
+    initFirebase(); await waitForAuth();
+    _audMigSay('⏳ Lendo a planilha inteira (pode levar até 1 min)…');
+    var j=await apiCall('list');
+    if(!j || j.status!=='ok' || !Array.isArray(j.rows)) throw new Error('planilha: '+((j&&j.message)||'sem resposta'));
+    var rows=j.rows;
+    _audMigSay('⏳ '+rows.length+' linhas lidas. Lendo membros e o que já está no Firebase…');
+    var sn=await Promise.all([fbDB.ref('membros').once('value'), fbDB.ref('auditorias').once('value'), fbDB.ref('auditorias_extra').once('value')]);
+    var mem=sn[0].val()||{}, exA=sn[1].val()||{}, exX=sn[2].val()||{};
+    var nomeLogin={};
+    Object.keys(USUARIOS).forEach(function(l){ nomeLogin[_audNomeKey(USUARIOS[l])]=l; });
+    Object.keys(mem).forEach(function(l){ if(mem[l]&&mem[l].nome) nomeLogin[_audNomeKey(mem[l].nome)]=l; });
+    if(!nomeLogin[_audNomeKey('Gabriel Macor')]) nomeLogin[_audNomeKey('Gabriel Macor')]='gabrielcm';
+    if(!nomeLogin[_audNomeKey('Erli Teresinha Marques')]) nomeLogin[_audNomeKey('Erli Teresinha Marques')]='erlitm';
+    var grupos={}, ordem=[];
+    rows.forEach(function(r,i){
+      var n=String(r.numero_atendimento==null?'':r.numero_atendimento).trim();
+      if(AUD_KEY_RE.test(n)){ if(!grupos[n]){ grupos[n]=[]; ordem.push(n); } grupos[n].push(i); }
+    });
+    var lotes=[], usados={}, novos=0, jaTinha=0, extras=0, extrasJa=0, semLogin={}, escritos=[];
+    ordem.forEach(function(k){
+      var idx=grupos[k];
+      var ef=idx.filter(function(i){ var a=String(rows[i].auditor||'').trim(); return a && a!==AUD_ANON; })[0];
+      if(ef===undefined) ef=idx[0];
+      usados[ef]=1;
+      if(exA[k]){ jaTinha++; return; }
+      var rec=_audLimpo(rows[ef]); rec.numero_atendimento=k;
+      var na=String(rec.auditor||'').trim();
+      rec.login=(na && na!==AUD_ANON)?(nomeLogin[_audNomeKey(na)]||''):'';
+      if(na && na!==AUD_ANON && !rec.login) semLogin[na]=(semLogin[na]||0)+1;
+      rec.migrado=true;
+      var u={}; u['auditorias/'+k]=rec; u['auditados/'+k]=_audMeta(rec); u['auditados_num/'+k]=true;
+      lotes.push(u); escritos.push({p:'a', k:k, src:rows[ef]}); novos++;
+    });
+    var vistos={};
+    rows.forEach(function(r,i){
+      if(usados[i]) return;
+      var rec=_audLimpo(r); var h=_audHash(JSON.stringify(rec)); vistos[h]=(vistos[h]||0)+1;
+      var xk='x'+h+'_'+vistos[h];
+      if(exX[xk]){ extrasJa++; return; }
+      rec.migrado=true; var u={}; u['auditorias_extra/'+xk]=rec; lotes.push(u); escritos.push({p:'x', k:xk, src:r}); extras++;
+    });
+    var feitos=0, upd={}, nUpd=0;
+    for(var i=0;i<lotes.length;i++){
+      Object.assign(upd, lotes[i]); nUpd++;
+      if(nUpd>=120 || i===lotes.length-1){
+        await _audTeto(fbDB.ref().update(upd), 60000, 'o Firebase não confirmou um lote em 60 s');
+        feitos+=nUpd; upd={}; nUpd=0;
+        _audMigSay('⏳ Gravando no Firebase… '+feitos+' de '+lotes.length);
+      }
+    }
+    _audMigSay('⏳ Conferindo campo a campo…');
+    var sv=await Promise.all([fbDB.ref('auditorias').once('value'), fbDB.ref('auditorias_extra').once('value')]);
+    var fa=sv[0].val()||{}, fx=sv[1].val()||{}, diverg=[];
+    escritos.forEach(function(e){
+      var dst=(e.p==='a'?fa:fx)[e.k];
+      if(!dst){ diverg.push(e.k+': ausente'); return; }
+      AUD_COLS.forEach(function(h){ var a=e.src[h]; if(h==='numero_atendimento') a=String(a==null?'':a).trim(); if(!_audIgual(a, dst[h])) diverg.push(e.k+'.'+h); });
+    });
+    var totalFb=Object.keys(fa).length+Object.keys(fx).length;
+    var sl=Object.keys(semLogin);
+    var txt='<b>'+(diverg.length?'⚠️':'✅')+' Cópia concluída.</b><br>'
+      +'Planilha: <b>'+rows.length+'</b> linhas · Firebase agora: <b>'+totalFb+'</b> ('+Object.keys(fa).length+' atendimentos + '+Object.keys(fx).length+' linhas repetidas do modelo antigo).<br>'
+      +'Copiadas agora: '+novos+' atendimentos + '+extras+' repetidas · já estavam: '+jaTinha+' + '+extrasJa+'.<br>'
+      +'Conferência campo a campo: <b>'+(diverg.length?diverg.length+' divergência(s)':'0 divergências')+'</b>'
+      +(diverg.length?' — '+escapeHtml(diverg.slice(0,8).join(', '))+(diverg.length>8?'…':''):'')+'.'
+      +(sl.length?'<br>⚠️ Auditor(es) sem login identificado (só você e a diretoria veem essas linhas): '+escapeHtml(sl.map(function(n){ return n+' ('+semLogin[n]+')'; }).join(', '))+'.':'')
+      +(rows.length!==totalFb?'<br>⚠️ O total no Firebase difere do total da planilha — repita a cópia; se persistir, me avise antes de ligar.':'')
+      +((!diverg.length && rows.length===totalFb && CFG_PLAT.auditorias_firebase!==true)?'<br>Próximo passo: <b>Ligar o Firebase como banco principal</b>.':'');
+    _audMigSay(txt);
+  }catch(e){
+    _audMigSay('⛔ A cópia parou: '+escapeHtml(String((e&&e.message)||e))+(mIsPermDenied(e)?' (permissão negada — as regras v32 já foram publicadas?)':'')+'. Pode repetir: o que já foi copiado não é duplicado.');
+  }
+}
+async function audAtivar(on){
+  if(!currentUser || currentUser.login!==OWNER_LOGIN) return;
+  var msg=on
+    ? 'LIGAR o Firebase como banco principal das auditorias?\n\nA partir de agora, consultar e salvar auditorias passa a ser pelo Firebase (rápido). A planilha continua recebendo uma cópia de cada salvamento.\n\nFaça isso logo DEPOIS de copiar a planilha (conferência sem divergências).'
+    : 'DESLIGAR o Firebase e voltar a usar a planilha como banco principal?\n\nUse só se algo der errado. O que foi salvo pelo Firebase já está na planilha (cópia automática).';
+  if(!confirm(msg)) return;
+  try{
+    initFirebase(); await waitForAuth();
+    if(on){
+      var s=await fbDB.ref('auditados_num').once('value'); var n=Object.keys(s.val()||{}).length;
+      if(!n){ alert('O Firebase ainda não tem auditorias. Faça a cópia da planilha primeiro.'); return; }
+    }
+    await fbDB.ref('config_plataforma').update({auditorias_firebase:!!on});
+    CFG_PLAT.auditorias_firebase=!!on;
+    if(_membrosAdminAberto) membrosAdminRender();
+    mMsg(on?'✔ Firebase LIGADO como banco principal das auditorias.':'✔ Voltou para a planilha como banco principal.', true);
+  }catch(e){ mMsg('Erro: '+(mIsPermDenied(e)?'permissão negada (regras v32 publicadas?)':(e.message||e)), false); }
+}
+async function audExportarCSV(){
+  if(!currentUser || currentUser.login!==OWNER_LOGIN) return;
+  try{
+    initFirebase(); await waitForAuth();
+    var sv=await Promise.all([fbDB.ref('auditorias').once('value'), fbDB.ref('auditorias_extra').once('value')]);
+    var linhas=[];
+    [sv[0].val()||{}, sv[1].val()||{}].forEach(function(o){ Object.keys(o).forEach(function(k){ if(o[k]) linhas.push(o[k]); }); });
+    var cols=AUD_COLS.concat(['login']);
+    var esc=function(v){ v=(v==null)?'':String(v); return '"'+v.replace(/"/g,'""')+'"'; };
+    var csv=[cols.join(',')].concat(linhas.map(function(r){ return cols.map(function(c){ return esc(r[c]); }).join(','); })).join('\r\n');
+    var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'}));
+    a.download='auditorias_firebase_'+fmtSaoPaulo(relogioAgora(), false)+'.csv'; document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    mMsg('✔ CSV gerado com '+linhas.length+' linhas.', true);
+  }catch(e){ mMsg('Erro ao exportar: '+(mIsPermDenied(e)?'permissão negada':(e.message||e)), false); }
 }
 
 /* === EMAILJS CONFIG === */
@@ -4967,6 +5270,11 @@ async function checkAttendance(){
 
   try{
     const json=await apiAuditorias('check',{numero:att});     // V13: só as linhas deste nº (antes: a planilha inteira)
+    if(json && json.status==='invalido'){   // parte 35: a chave do Firebase só aceita letras/números
+      blockedSubmit=true; renderForm();
+      box.innerHTML=`<div class="alert-box alert-blocked"><span class="ic">⚠️</span><div><b>${escapeHtml(json.message||'Número de atendimento inválido.')}</b></div></div>`;
+      return;
+    }
     if(json.status!=='ok'||!Array.isArray(json.rows)){attVerifyFail(box,'O banco de dados respondeu de forma inválida'+(json&&json.message?' ('+json.message+')':'')+'.');return;}
 
     const matches=json.rows.filter(r=>String(r.numero_atendimento||'').trim()===att);
@@ -4995,6 +5303,29 @@ async function checkAttendance(){
     const row=matches[0];
     const rec=rowToRecord(row);
     _attPrefill=att;   // parte 32: daqui em diante o formulário recebe dados deste nº
+    if(row._meta){
+      // parte 35: auditoria de OUTRO auditor — as respostas não são lidas (regras v32); só o resumo do índice
+      const m=row._meta, quem=String(m.a||'outro auditor');
+      blockedSubmit=true; existingRecordId=null;
+      lockedItemNums=new Set(ITEMS.map(i=>i.num)); allMultiKeys().forEach(k=>lockedItemNums.add(k));
+      lockedFisico=new Set(ITEMS_FISICO.map(i=>String(i.num)));
+      if(m.c){
+        box.innerHTML=`<div class="alert-box alert-blocked"><span class="ic">⛔</span><div>
+          <b>Este prontuário já foi auditado completamente</b> — por ${escapeHtml(quem)}${m.d?' em '+escapeHtml(String(m.d)):''}.
+          <br>Informe outro número de atendimento para iniciar uma nova auditoria.
+        </div></div>`;
+      } else {
+        blockedMotivo='parcial_outro';
+        box.innerHTML=`<div class="alert-box alert-blocked"><span class="ic">🔒</span><div>
+          <b>Auditoria parcial em andamento por ${escapeHtml(quem)}</b>${m.d?' (iniciada em '+escapeHtml(String(m.d))+')':''} — ${Number(m.r)||0} de ${Number(m.t)||0} itens respondidos.
+          <br>Somente <b>${escapeHtml(quem)}</b> pode finalizá-la. Informe outro número de atendimento para iniciar uma nova auditoria.
+        </div></div>`;
+      }
+      renderForm();
+      if(typeof renderMultiForm==='function')renderMultiForm();
+      if(typeof renderFisicoExtra==='function')renderFisicoExtra();
+      return;
+    }
     const recTipo=(rec.tipoProntuario||'online').toLowerCase();
     // Escopo por tipo de prontuário:
     //  - online: itens online (ITEMS) + equipe multiprofissional
@@ -5200,7 +5531,10 @@ async function checkAttendance(){
   }
 }
 
-function sendToSheets(record){
+function sendToSheets(record){   // parte 35: Firebase quando ligado; senão a planilha (caminho antigo)
+  return audFirebaseAtivo().then(function(fb){ return fb ? audFbSalvar(record) : _sendToSheetsPlanilha(record); });
+}
+function _sendToSheetsPlanilha(record){
   if(!SHEETS_WEBAPP_URL||SHEETS_WEBAPP_URL==='COLE_AQUI_A_URL_DO_SEU_APPS_SCRIPT'){
     return Promise.resolve({status:'error',message:'servidor não configurado nesta versão'});
   }
