@@ -2220,7 +2220,13 @@ function membroOculto(login){
 function msgErroGoogle(e){
   var c=(e&&e.code)||'';
   if(c==='auth/popup-closed-by-user' || c==='auth/cancelled-popup-request') return '';
-  if(c==='auth/popup-blocked') return 'O navegador bloqueou a janela do Google. Permita pop-ups para este site e tente de novo.';
+  if(c==='auth/popup-blocked'){
+    var ios=/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+    var safari=/Safari/.test(navigator.userAgent) && !/Chrome|CriOS|FxiOS|EdgiOS/.test(navigator.userAgent);
+    return (ios||safari)
+      ? 'O Safari segurou a janela do Google. Toque de novo em "Entrar com Google" — na 2ª vez ela abre. Se ainda assim não abrir: Ajustes do iPhone → Safari → desative "Bloquear Pop-ups" e tente de novo.'
+      : 'O navegador bloqueou a janela do Google. Clique de novo em "Entrar com Google"; se não abrir, permita pop-ups para este site.';
+  }
   if(c==='auth/unauthorized-domain') return 'Este endereço ainda não está autorizado para login com Google. Avise a presidência.';
   if(c==='auth/operation-not-allowed') return 'O login com Google ainda não foi ativado. Avise a presidência.';
   if(c==='auth/network-request-failed') return 'Sem conexão. Verifique a internet e tente de novo.';
@@ -3044,6 +3050,10 @@ function initFirebase(){
     fbAuth.setPersistence(firebase.auth.Auth.Persistence.SESSION).catch(function(e){
       console.warn('Persistência Auth:', e.message);
     });
+    // 2026-10-17 (parte 36): Safari/iPhone só abre a janela do Google se ela abrir "colada" ao toque. O Firebase
+    // precisa do iframe de login já carregado; getRedirectResult() força esse carregamento agora (sem efeito
+    // colateral: não há login por redirecionamento nesta plataforma), e o 1º toque deixa de ser bloqueado.
+    setTimeout(function(){ try{ fbAuth.getRedirectResult().catch(function(){}); }catch(e){} }, 0);
   }catch(e){console.warn('Firebase não inicializado:',e.message);}
 }
 
