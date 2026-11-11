@@ -3346,6 +3346,7 @@ function completeLogin(user){
   if(sairBtn) sairBtn.style.display='flex';
   const epiBtn=$('tab-epidemio'); if(epiBtn) epiBtn.style.display='flex';
   abasAplicar(); cfgPlatCarregar();
+  try{ if(!podeVerResultados()) dashPurgarCacheLocal(); }catch(e){}   // parte 39
   if((location.hash==='#dashboard' || location.hash==='#resultados') && podeVerResultados()){ setTimeout(function(){ abrirDashboardAdmin(document.getElementById('tab-analise')); }, 350); }
   afterLogin();
 }
@@ -5897,7 +5898,13 @@ function abrirPerfilEpidemiologico(btn){
   renderDashboard();
 }
 function dashGarantirConexao(){
-  if(!__dashAttached){ try{ dashAttach(); dashProtoAttach(); dashSepseAttach(); dashSibAttach(); dashEditoresAttach(); __dashAttached=true; }catch(e){ console.warn('dashAttach:', e && e.message); } }
+  if(!__dashAttached){
+    try{
+      dashAttach(); dashEditoresAttach();
+      if(dashIsOwner()){ dashProtoAttach(); dashSepseAttach(); dashSibAttach(); }   // protocolos: só no Upload de bases (administrador)
+      __dashAttached=true;
+    }catch(e){ console.warn('dashAttach:', e && e.message); }
+  }
 }
 /* ============================================================
    DASHBOARD DA INTERNAÇÃO
@@ -5996,7 +6003,11 @@ function dashEditoresPanelHtml(){
   '</details>';
 }
 function dashEsc(s){ try{ return escapeHtml(String(s==null?'':s)); }catch(e){ return String(s==null?'':s); } }
-function isDashVisible(){ var p=document.getElementById('epidemio'); return !!(p && p.classList.contains('active')); }
+function isDashVisible(){
+  var p=document.getElementById('epidemio'); if(p && p.classList.contains('active')) return true;
+  var a=document.getElementById('dashboardAdmin'), u=document.getElementById('dashAdmUpload');   // parte 39
+  return !!(a && a.classList.contains('active') && u && u.style.display!=='none');
+}
 
 /* ---------- normalização de colunas ---------- */
 function dashNormKey(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim(); }
@@ -6090,8 +6101,15 @@ function dashRowToRecord(row, headerMap){
 }
 
 /* ---------- persistência (Firebase + localStorage) ---------- */
+/* parte 39 (2026-11-11): só o ADMINISTRADOR guarda a base de atendimentos no navegador (localStorage).
+   Os demais membros mantêm só em memória (some ao fechar a aba) — a base tem dados clínicos de pacientes
+   e os auditores usam computadores diferentes/compartilhados. */
+function dashPurgarCacheLocal(){
+  [DASH_KEY,'pl_sepse','pl_sibilancia','pl_protocolos'].forEach(function(k){ try{ localStorage.removeItem(k); }catch(_){ } });
+}
 function dashSaveLocal(canon){
   var data=JSON.stringify(canon||[]);
+  if(!dashIsOwner()){ dashPurgarCacheLocal(); store.mem[DASH_KEY]=data; return {ok:true, memoria:true}; }
   try{ localStorage.setItem(DASH_KEY, data); try{ delete store.mem[DASH_KEY]; }catch(_){ } return {ok:true}; }
   catch(e){
     // cota do navegador excedida — tenta guardar uma versão mais leve (sem a anamnese, campo mais pesado)
@@ -7429,7 +7447,9 @@ function renderDashboard(){
   dashDestroyCharts();
   // 2026-10-12: auditores veem SÓ a busca por atendimento; painel completo apenas p/ dono/editores
   var _upHost=dEl('dashUploadHost');
-  if(!dashCanEdit()){ v.innerHTML=''; v.style.display='none'; if(_upHost) _upHost.innerHTML=''; dbBuscaRender(); return; }
+  // parte 39 (2026-11-11): todos os membros veem os gráficos e filtros dos ATENDIMENTOS (planilhas enviadas
+  // pelo administrador). Protocolos, tabela registro a registro e exportação CSV: só o administrador.
+  if(!currentUser){ v.innerHTML=''; v.style.display='none'; if(_upHost) _upHost.innerHTML=''; return; }
   v.style.display='';
   // parte 38: o envio de bases (upload) é exclusivo do administrador e fica na aba Dashboard
   var admin=dashIsOwner();
@@ -7523,7 +7543,7 @@ function renderDashboard(){
     '<div class="card">'+
       dashEditoresPanelHtml()+
       '<div class="dsh-head"><div><h2>📊 Banco de Dados</h2>'+
-      '<p class="dsh-sub">Todos os atendimentos realizados no hospital no período selecionado — filtre por clínica, tipo de atendimento, sexo e quais evoluíram para internação. Inclui diagnósticos (CID), tempo de internação, perfil dos pacientes (idade e sexo) e desfechos. Dados compartilhados com a equipe.</p></div>'+
+      '<p class="dsh-sub">Todos os atendimentos realizados no hospital no período selecionado — filtre por clínica, tipo de atendimento, sexo e quais evoluíram para internação. Inclui diagnósticos (CID), tempo de internação, perfil dos pacientes (idade e sexo) e desfechos. Base: planilhas de atendimentos enviadas pela administração (não inclui a análise dos prontuários auditados).</p></div>'+
       '<div class="dsh-filters" id="dashFilters"></div></div>'+
       (admin?'<div style="margin:0 0 14px;font-size:12.5px;color:var(--muted)">📥 Para enviar ou substituir bases, use <a href="#" onclick="_dashAdmSecao=\'upload\';abrirDashboardAdmin();return false" style="color:var(--accent);font-weight:700">Dashboard → Upload de bases</a>.</div>':'')+
       '<div id="dashBody"></div>'+
@@ -7638,7 +7658,7 @@ function dashBuildFilters(){
     (canCompare?('<button class="btn small'+(dashCompare?' on':'')+'" onclick="dashToggleCompare()" title="Sobrepõe duas séries (um ano por cor) nos gráficos de período — compara os mesmos períodos entre os anos" style="'+(dashCompare?'background:var(--accent);color:#fff;border-color:var(--accent)':'')+'">🔀 Comparar anos'+(dashCompare?' ✓':'')+'</button>'):'')+
     dashChartsMenuHtml()+
     (anySel?'<button class="btn small" onclick="dashClearFilters()" title="Limpar todos os filtros">✕ limpar</button>':'')+
-    '<button class="btn small" onclick="dashExport()">⬇ CSV</button>';
+    (dashIsOwner()?'<button class="btn small" onclick="dashExport()">⬇ CSV</button>':'');
 }
 function dashToggleCompare(){ dashCompare=!dashCompare; if(dashCompare) dashSel.mes=[]; /* mês é específico de um ano — some no modo comparar */ dashBuildFilters(); dashDraw(); }
 /* ---- menu "Gráficos" (mostrar/ocultar) ---- */
@@ -7684,10 +7704,7 @@ function dashChartDefs(){
     {key:'intAno', title:'Atendimentos por ano'},
     {key:'hora', title:'Atendimentos por hora de entrada'},
     {key:'losClin', title:'Tempo médio de internação por clínica'},
-    {key:'piramide', title:'Pirâmide etária por sexo'},
-    {key:'proto', title:'Protocolos institucionais'},
-    {key:'sepse', title:'Protocolo de Sepse (Pediatria)'},
-    {key:'sibilancia', title:'Protocolo de Sibilância (Pediatria)'}
+    {key:'piramide', title:'Pirâmide etária por sexo'}
   ];
 }
 function dashFiltered(opts){
@@ -7727,8 +7744,8 @@ function dashDraw(){
   dashDestroyCharts();
   if(!window.Chart && dashData.length){ /* Chart.js pode ainda estar carregando */ }
   if(!dashData.length){
-    var _extra=(dashVis('sepse')?dashSepseBlockHtml():'')+(dashVis('sibilancia')?dashSibBlockHtml():'')+(dashVis('proto')?dashProtoBlockHtml():'');
-    body.innerHTML='<div class="dsh-empty">Nenhum dado de internação ainda.'+(dashIsAdmin()?' O administrador importa a planilha em Dashboard → Upload de bases.':' Assim que o escalista importar os dados, eles aparecem aqui.')+'</div>'+_extra;
+    var _extra='';   // parte 39: protocolos não aparecem mais no Banco de Dados
+    body.innerHTML='<div class="dsh-empty">Nenhum dado de internação ainda.'+(dashIsOwner()?' O administrador importa a planilha em Dashboard → Upload de bases.':' Assim que o escalista importar os dados, eles aparecem aqui.')+'</div>'+_extra;
     if(_extra){
       if(window.Chart){ var _isLight=!document.body.classList.contains('dark'); Chart.defaults.color=_isLight?'#475569':'#94a3b8'; Chart.defaults.borderColor=_isLight?'rgba(15,23,42,.08)':'rgba(148,163,184,.15)'; }
       if(dashVis('sepse')) dashSepseDraw();
@@ -7814,16 +7831,14 @@ function dashDraw(){
     {html:cb('piramide','Pirâmide etária por sexo','dcPiramide',null,true)}
   ]);
 
-  var protoBlock = dashVis('proto') ? dashProtoBlockHtml() : '';
-  var sepseBlock = dashVis('sepse') ? dashSepseBlockHtml() : '';
-  var sibBlock = dashVis('sibilancia') ? dashSibBlockHtml() : '';
+  // parte 39: Banco de Dados = só atendimentos (protocolos saíram desta aba)
 
   // banner de período: deixa claro QUAL mês/meses estão sendo exibidos
   var periodo='<div class="dsh-period"><span class="lbl">📅 Exibindo</span> <b>'+dashEsc(dashPeriodoLabel())+'</b>'+
     ' <span class="cnt">'+n+' atendimento(s)</span>'+
     '<span class="note">Estatísticas apenas de meses já <b>encerrados</b> — o mês em andamento ('+dashMesLabel(dashMesAtual())+') aparece só depois de terminar.</span></div>';
 
-  body.innerHTML = periodo + kpis + (dashVis('cross')?dashCrossHtml():'') + mainCharts + periodBlock + interpCharts + protoBlock + sepseBlock + sibBlock + dashTableHtml(arr);
+  body.innerHTML = periodo + kpis + (dashVis('cross')?dashCrossHtml():'') + mainCharts + periodBlock + interpCharts + (dashIsOwner()?dashTableHtml(arr):'');
 
   if(window.Chart){
     var isLight=!document.body.classList.contains('dark');
@@ -7888,10 +7903,6 @@ function dashDraw(){
         tooltip:{callbacks:{label:function(ctx){ return ctx.dataset.label+': '+Math.abs(ctx.parsed.x); }}}},
       scales:{x:{stacked:true,beginAtZero:true,ticks:{callback:function(v){ return Math.abs(v); }}},y:{stacked:true}}});
 
-  // Protocolos institucionais (distribuição por protocolo)
-  if(dashVis('proto')) dashDrawProto();
-  if(dashVis('sepse')) dashSepseDraw();
-  if(dashVis('sibilancia')) dashSibDraw();
 
   // Cruzamento de variáveis (configurável)
   if(dashVis('cross')) dashDrawCross(arr);
@@ -8029,6 +8040,7 @@ function dashTableHtml(arr){
     '<div class="dsh-tablewrap"><table class="dsh-tbl"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>'+extra;
 }
 function dashExport(){
+  if(!dashIsOwner()) return;   // parte 39: exportação registro a registro só para o administrador
   var arr=dashFiltered(); if(!arr.length){ try{ toast('Nada para exportar.'); }catch(e){} return; }
   var cols=DASH_CANON.concat(['los']);
   var head=cols.map(function(f){ return DASH_LABELS[f]||(f==='los'?'Tempo (dias)':f); });
