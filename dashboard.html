@@ -843,7 +843,7 @@ async function auditoriasLinhas(){
     return {status:'ok', rows:rows};
   }catch(e){
     var den=!!e && (e.code==='PERMISSION_DENIED' || /permission[_ ]denied/i.test(String(e.message||'')));
-    return {status:'error', message: den ? 'Sem permissão para ler a base completa de auditorias (só presidente, vice e secretário(a), ou membros com "Resultados para membros efetivos" ligado).' : String((e&&e.message)||e)};
+    return {status:'error', message: den ? 'Sem permissão para ler a base completa de auditorias (exclusiva do administrador da plataforma).' : String((e&&e.message)||e)};
   }
 }
 async function loadFromSheets(){
@@ -2011,7 +2011,11 @@ async function renderAuditoresPanel(online){
 
 (function(){
   const SESSION_KEY='hps_dash_auth';
-  const DASH_ADMINS=['gabrielcm','rafaeldml'];
+  /* parte 38 (2026-11-11): dashboard e Resultados exclusivos do administrador (gabrielcm).
+     Conferido pelo uid da sessão do Firebase (não pelo que foi digitado) — as regras v33 garantem o mesmo nos dados. */
+  const DASH_ADMINS=['gabrielcm'];
+  const DASH_OWNER_UID='vikRnCmEpoV3Pity3oc70ouG0n63';
+  function dashEhAdmin(u){ return !!(u && u.uid===DASH_OWNER_UID); }
 
   // ===== MODO EMBED (aba "Resultados" do index.html): somente leitura, curado, sem login de admin =====
   if(window.__EMBED_RESULTADOS){
@@ -2024,6 +2028,11 @@ async function renderAuditoresPanel(online){
         if(d) d.innerHTML='<div id="embedMsg">Faça login na plataforma para visualizar os resultados.</div>';
         return;
       }
+      if(!dashEhAdmin(u)){
+        var d2=document.getElementById('dash');
+        if(d2) d2.innerHTML='<div id="embedMsg">Acesso restrito ao administrador da plataforma.</div>';
+        return;
+      }
       loadResultadosConfig().then(function(){ dash(); });
     });
     return;
@@ -2033,7 +2042,7 @@ async function renderAuditoresPanel(online){
   if(sessionStorage.getItem(SESSION_KEY)==='ok'){
     // Espera o Firebase restaurar a sessão antes de chamar a API
     waitForAuth().then(function(u){
-      if(!u){
+      if(!u || !dashEhAdmin(u)){
         sessionStorage.removeItem(SESSION_KEY);
         sessionStorage.removeItem('hps_dash_user');
         showDashLogin();
@@ -2076,6 +2085,11 @@ async function renderAuditoresPanel(online){
         await fbAuth.signInWithEmailAndPassword(authEmail(user), pass);
       }catch(e){
         err.textContent='Usuário ou senha incorretos.';
+        return;
+      }
+      if(!dashEhAdmin(fbAuth.currentUser)){
+        try{ await fbAuth.signOut(); }catch(e){}
+        err.textContent='Acesso negado. Este dashboard é restrito ao administrador.';
         return;
       }
 

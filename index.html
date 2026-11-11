@@ -678,8 +678,7 @@ body.dark #verAviso{background:#1F6FEB}
   <nav class="tabs">
     <button class="tab active" id="tab-inicio" onclick="showInicio('sobre',this)">Página Inicial</button>
     <button class="tab" id="tab-coleta" onclick="requestColeta(this)">Login</button>
-    <button class="tab" id="tab-analise" onclick="abrirDashboard()" style="display:none">Dashboard</button>
-    <button class="tab" id="tab-resultados" onclick="abrirResultados(this)" style="display:none">Resultados</button>
+    <button class="tab" id="tab-analise" onclick="abrirDashboardAdmin(this)" style="display:none">Dashboard</button>
     <button class="tab" id="tab-epidemio" onclick="abrirPerfilEpidemiologico(this)" style="display:none">Banco de Dados</button>
     <button class="tab" id="tab-sair" onclick="logout()" style="color:var(--red);display:none">Sair</button>
     <button class="tab" id="tab-cem" onclick="window.location.href='https://comissoeshps.github.io/comissao-etica-medica/'">Comissão de Ética Médica</button>
@@ -1215,16 +1214,32 @@ body.dark #verAviso{background:#1F6FEB}
 </section>
 
 <!-- ======== PERFIL EPIDEMIOLÓGICO ======== -->
-<section id="resultados" class="page">
+<!-- DASHBOARD DO ADMINISTRADOR (2026-11-11, parte 38): ex-aba "Resultados" + upload das bases. Só gabrielcm. -->
+<section id="dashboardAdmin" class="page">
   <div style="max-width:1180px;margin:0 auto;padding:0 4px">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin:6px 0 14px;flex-wrap:wrap">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin:6px 0 10px;flex-wrap:wrap">
       <div>
-        <h2 style="margin:0">Resultados</h2>
-        <p class="sub" style="margin:4px 0 0">Indicadores de conformidade dos prontuários auditados. Conteúdo curado pela coordenação da Comissão.</p>
+        <h2 style="margin:0">Dashboard</h2>
+        <p class="sub" style="margin:4px 0 0">Área exclusiva do administrador: resultados das auditorias e envio das bases de dados da plataforma.</p>
       </div>
-      <button onclick="abrirResultados(document.getElementById('tab-resultados'))" style="border:1.5px solid var(--line);background:#fff;border-radius:10px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;color:var(--navy);font-family:'DM Sans',sans-serif">&#8635; Atualizar</button>
     </div>
-    <iframe id="resultadosFrame" title="Resultados" style="width:100%;height:calc(100vh - 200px);min-height:560px;border:0;border-radius:14px;background:#fff;box-shadow:0 1px 3px rgba(11,31,58,.08)"></iframe>
+    <div class="subtabs" id="dashAdmSubtabs" style="margin:0 0 14px">
+      <button type="button" class="subtab active" id="dashAdmSubRes" onclick="dashAdmSecao('resultados')">📊 Resultados</button>
+      <button type="button" class="subtab" id="dashAdmSubUp" onclick="dashAdmSecao('upload')">📥 Upload de bases</button>
+    </div>
+    <div id="dashAdmResultados">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin:0 0 12px;flex-wrap:wrap">
+        <p class="sub" style="margin:0">Indicadores de conformidade dos prontuários auditados (visão curada).</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button onclick="abrirResultados()" style="border:1.5px solid var(--line);background:#fff;border-radius:10px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;color:var(--navy);font-family:'DM Sans',sans-serif">&#8635; Atualizar</button>
+          <button onclick="abrirDashboard()" style="border:1.5px solid var(--line);background:#fff;border-radius:10px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;color:var(--navy);font-family:'DM Sans',sans-serif">↗ Dashboard completo</button>
+        </div>
+      </div>
+      <iframe id="resultadosFrame" title="Resultados" style="width:100%;height:calc(100vh - 240px);min-height:560px;border:0;border-radius:14px;background:#fff;box-shadow:0 1px 3px rgba(11,31,58,.08)"></iframe>
+    </div>
+    <div id="dashAdmUpload" style="display:none">
+      <div class="card" id="dashUploadHost"><div style="color:var(--muted);text-align:center;padding:30px 0">Carregando…</div></div>
+    </div>
   </div>
 </section>
 <section id="epidemio" class="page">
@@ -1896,12 +1911,9 @@ function membrosAdminRender(){
     h+='<div class="alert-box alert-partial" style="margin-top:12px"><span class="ic">&#9888;&#65039;</span><div><b>A lista do Firebase está incompleta:</b> faltam '+faltam.length+' membro(s) da lista fixa ('+mEsc(faltam.join(', '))+').<br>'
       +'<button class="primary" style="margin-top:8px;padding:8px 14px" onclick="membrosImportar()">Completar lista (importar os '+faltam.length+' que faltam)</button></div></div>';
   }
-  h+='<div style="margin-top:16px;padding-top:12px;border-top:1px dashed var(--line)">'
-    +'<div style="font-weight:800;color:var(--navy);margin-bottom:6px">Abas visíveis para os membros efetivos</div>'
-    +'<label style="font-size:13px;display:inline-flex;gap:8px;align-items:center;cursor:pointer">'+mChk('cfgResAud',CFG_PLAT.resultados_auditores===true)+' Aba <b>Resultados</b> para membros efetivos</label>'
-    +' <button class="secondary" style="padding:6px 12px;margin-left:8px" onclick="cfgPlatSalvar()">Salvar</button>'
-    +'<div style="font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.5">Padrão: <b>desligado</b> — membros efetivos não veem a aba Resultados (as demais abas continuam); a diretoria (presidente, vice e secretário/a) sempre vê Resultados. Vale na hora para quem estiver logado. '
-    +'É só visual — não é barreira de segurança para os dados.</div></div>';
+  h+='<div style="margin-top:16px;padding-top:12px;border-top:1px dashed var(--line);font-size:12px;color:var(--muted);line-height:1.5">'
+    +'<b style="color:var(--navy)">Resultados das auditorias:</b> ficam na aba <b>Dashboard</b>, exclusiva do administrador (gabrielcm). '
+    +'Diretoria e membros efetivos não têm acesso (regras do Firebase v33).</div>';
   (function(){
     var av=CFG_PLAT.aviso_versao, ult=(av && av.em) ? ('Último aviso: '+_verFmt(av.em)+' (versão de '+_verFmt(Date.parse(av.lm))+')') : 'Nenhum aviso emitido ainda.';
     h+='<div style="margin-top:16px;padding-top:12px;border-top:1px dashed var(--line)">'
@@ -2706,23 +2718,25 @@ var _cfgPlatRef=null;
    membro efetivo só vê se o presidente ligar "Resultados para membros efetivos" (padrão: DESLIGADO).
    Papel desconhecido (lista ainda carregando) = tratado como membro efetivo. */
 function papelAtual(){ try{ var m=MEMBROS_DB&&currentUser&&MEMBROS_DB[currentUser.login]; return (m&&m.papel)||'membro'; }catch(e){ return 'membro'; } }
+/* 2026-11-11 (parte 38): a aba "Resultados" deixou de existir. O conteúdo foi para a aba "Dashboard",
+   EXCLUSIVA do administrador (gabrielcm) — diretoria e membros não veem. O toggle
+   config_plataforma/resultados_auditores não tem mais efeito na interface (regras v33 também o ignoram). */
 function podeVerResultados(){
-  if(!currentUser) return false;
-  if(currentUser.login===OWNER_LOGIN) return true;
-  var p=papelAtual();
-  if(p==='presidente' || p==='vice' || p==='secretario') return true;
-  return CFG_PLAT.resultados_auditores===true;
+  return !!(currentUser && currentUser.login===OWNER_LOGIN);
 }
 function abasAplicar(){
-  var b=document.getElementById('tab-resultados'); if(!b) return;
+  var b=document.getElementById('tab-analise'); if(!b) return;
   var ok=podeVerResultados();
   b.style.display=ok?'flex':'none';
-  if(!ok){
-    var pg=document.getElementById('resultados');
-    var fr=document.getElementById('resultadosFrame');
-    if(fr){ fr.removeAttribute('src'); fr.removeAttribute('data-src'); }
-    if(pg && pg.classList.contains('active')) show('sobre', document.getElementById('tab-inicio'));
-  }
+  if(!ok) dashAdmLimpar();
+}
+/* Esvazia a área do administrador (iframe + painel de upload) e sai dela se estiver aberta. */
+function dashAdmLimpar(){
+  var fr=document.getElementById('resultadosFrame');
+  if(fr){ fr.removeAttribute('src'); fr.removeAttribute('data-src'); }
+  var h=document.getElementById('dashUploadHost'); if(h) h.innerHTML='';
+  var pg=document.getElementById('dashboardAdmin');
+  if(pg && pg.classList.contains('active')) show('sobre', document.getElementById('tab-inicio'));
 }
 function cfgPlatCarregar(){
   try{
@@ -2765,8 +2779,8 @@ async function cfgPlatSalvar(){
      auditados/<nº>         = {a:auditor, l:login, c:completa, r:respondidos, t:total, d:data, tp:tipo}
                               → qualquer membro lê UM nº (bloqueio de duplicidade SEM ver as respostas)
      auditados_num/<nº>     = true (lista de nºs para o seletor automático)
-   Regras v32: o auditor lê só as suas; presidente/vice/secretário(a) leem tudo; membro efetivo lê a base
-   só com "Resultados para membros efetivos" ligado (a aba Resultados precisa dela). Grava só o próprio
+   Regras v33 (parte 38): o auditor lê só as suas; a base inteira (auditorias + auditorias_extra) só o
+   administrador (gabrielcm) lê — diretoria e o antigo toggle "Resultados para membros efetivos" saíram. Grava só o próprio
    auditor (nome oficial de membros/<login>, hora do servidor), nunca sobre auditoria de outro; o presidente
    pode tudo. A planilha recebe uma CÓPIA (espelho, action 'save' com espelho:true) sem travar o auditor. */
 var AUD_COLS=['id','data_auditoria','numero_atendimento','setor_auditado','tipo_internacao','auditor','dias_internacao','desfecho','conformidade_geral_pct',
@@ -3332,7 +3346,7 @@ function completeLogin(user){
   if(sairBtn) sairBtn.style.display='flex';
   const epiBtn=$('tab-epidemio'); if(epiBtn) epiBtn.style.display='flex';
   abasAplicar(); cfgPlatCarregar();
-  if(location.hash==='#resultados' && podeVerResultados()){ setTimeout(function(){ var rb=document.getElementById('tab-resultados'); if(rb) abrirResultados(rb); }, 350); }
+  if((location.hash==='#dashboard' || location.hash==='#resultados') && podeVerResultados()){ setTimeout(function(){ abrirDashboardAdmin(document.getElementById('tab-analise')); }, 350); }
   afterLogin();
 }
 
@@ -3524,8 +3538,9 @@ function logout(){
   // Ocultar botão Sair, voltar para aba "sobre"
   const sairBtn=$('tab-sair'); if(sairBtn) sairBtn.style.display='none';
   const epiBtn=$('tab-epidemio'); if(epiBtn) epiBtn.style.display='none';
-  const resBtn=$('tab-resultados'); if(resBtn) resBtn.style.display='none';
+  const dashAdmBtn=$('tab-analise'); if(dashAdmBtn) dashAdmBtn.style.display='none';
   var _rf=document.getElementById('resultadosFrame'); if(_rf){ _rf.removeAttribute('src'); _rf.removeAttribute('data-src'); }
+  var _uh=document.getElementById('dashUploadHost'); if(_uh) _uh.innerHTML='';
   try{ renderRegimento(); }catch(e){}
   try{ if(typeof dashDetach==='function') dashDetach(); }catch(e){}
   try{ cfgPlatDesligar(); }catch(e){}
@@ -4829,11 +4844,32 @@ function abrirDashboard(){
   }
 }
 
-/* Aba "Resultados": embute o dashboard curado (somente leitura) dentro da página inicial */
-function abrirResultados(btn){
+/* Aba "Dashboard" (parte 38): só o administrador. Subseções "Resultados" (dashboard curado em iframe)
+   e "Upload de bases" (o painel "Adicionar dados" que antes ficava no Banco de Dados). */
+var _dashAdmSecao='resultados';
+function abrirDashboardAdmin(btn){
+  if(!currentUser){ alert('Faça login para acessar o Dashboard.'); return; }
+  if(!podeVerResultados()){ abasAplicar(); alert('Acesso restrito ao administrador da plataforma.'); return; }
+  show('dashboardAdmin', btn||document.getElementById('tab-analise'));
+  dashAdmSecao(_dashAdmSecao);
+}
+function dashAdmSecao(sec){
+  if(!podeVerResultados()){ abasAplicar(); return; }
+  _dashAdmSecao=(sec==='upload')?'upload':'resultados';
+  var up=(_dashAdmSecao==='upload');
+  var a=document.getElementById('dashAdmResultados'), b=document.getElementById('dashAdmUpload');
+  if(a) a.style.display=up?'none':'';
+  if(b) b.style.display=up?'':'none';
+  var s1=document.getElementById('dashAdmSubRes'), s2=document.getElementById('dashAdmSubUp');
+  if(s1) s1.classList.toggle('active',!up);
+  if(s2) s2.classList.toggle('active',up);
+  if(up){ dashGarantirConexao(); renderDashboard(); }
+  else abrirResultados();
+}
+/* Subseção "Resultados": embute o dashboard curado (somente leitura) */
+function abrirResultados(){
   if(!currentUser){ alert('Faça login para acessar os Resultados.'); return; }
   if(!podeVerResultados()){ abasAplicar(); return; }
-  show('resultados', btn||document.getElementById('tab-resultados'));
   var fr=document.getElementById('resultadosFrame');
   if(fr){
     var base=window.location.href.replace(/[#?].*$/,'').replace(/\/[^\/]*$/, '/');
@@ -5857,8 +5893,11 @@ function abrirPerfilEpidemiologico(btn){
   show('epidemio', btn);
   dbBuscaRender();
   var v=document.getElementById('view-dashboard'); if(v) v.classList.add('active');
-  if(!__dashAttached){ try{ dashAttach(); dashProtoAttach(); dashSepseAttach(); dashSibAttach(); dashEditoresAttach(); __dashAttached=true; }catch(e){ console.warn('dashAttach:', e && e.message); } }
+  dashGarantirConexao();
   renderDashboard();
+}
+function dashGarantirConexao(){
+  if(!__dashAttached){ try{ dashAttach(); dashProtoAttach(); dashSepseAttach(); dashSibAttach(); dashEditoresAttach(); __dashAttached=true; }catch(e){ console.warn('dashAttach:', e && e.message); } }
 }
 /* ============================================================
    DASHBOARD DA INTERNAÇÃO
@@ -6941,7 +6980,7 @@ function dashSepseBlockHtml(){
   if(!dashSepse.length){
     if(!dashIsAdmin()) return '';
     return '<div class="dsh-section"><h3 class="dsh-section-h">🩸 Protocolo de Sepse (Pediatria)</h3>'+
-      '<div class="dsh-empty">Nenhum protocolo de sepse cadastrado. Em <b>Adicionar dados</b>, escolha <b>Protocolo (Sibilância / Sepse)</b> → <b>Manualmente</b> e cadastre um protocolo de sepse.</div></div>';
+      '<div class="dsh-empty">Nenhum protocolo de sepse cadastrado. O administrador cadastra em <b>Dashboard → Upload de bases</b>: escolha <b>Protocolo (Sibilância / Sepse)</b> → <b>Manualmente</b> e cadastre um protocolo de sepse.</div></div>';
   }
   var fa=dashSel.ano||[];
   var arr=dashSepse.filter(function(r){ return !(fa.length && fa.indexOf(r.ano||'')<0); });
@@ -7289,7 +7328,7 @@ function dashSibBlockHtml(){
   if(!dashSib.length){
     if(!dashIsAdmin()) return '';
     return '<div class="dsh-section"><h3 class="dsh-section-h">🌬️ Protocolo de Sibilância (Pediatria)</h3>'+
-      '<div class="dsh-empty">Nenhum protocolo de sibilância cadastrado. Em <b>Adicionar dados</b>, escolha <b>Protocolo (Sibilância / Sepse)</b> → <b>Planilha</b> (modelo Sibilância detalhada) ou <b>Manualmente</b>.</div></div>';
+      '<div class="dsh-empty">Nenhum protocolo de sibilância cadastrado. O administrador cadastra em <b>Dashboard → Upload de bases</b>: escolha <b>Protocolo (Sibilância / Sepse)</b> → <b>Planilha</b> (modelo Sibilância detalhada) ou <b>Manualmente</b>.</div></div>';
   }
   var fa=dashSel.ano||[];
   var arr=dashSib.filter(function(r){ return !(fa.length && fa.indexOf(r.ano||'')<0); });
@@ -7389,9 +7428,11 @@ function renderDashboard(){
   var v=dEl('view-dashboard'); if(!v) return;
   dashDestroyCharts();
   // 2026-10-12: auditores veem SÓ a busca por atendimento; painel completo apenas p/ dono/editores
-  if(!dashCanEdit()){ v.innerHTML=''; v.style.display='none'; dbBuscaRender(); return; }
+  var _upHost=dEl('dashUploadHost');
+  if(!dashCanEdit()){ v.innerHTML=''; v.style.display='none'; if(_upHost) _upHost.innerHTML=''; dbBuscaRender(); return; }
   v.style.display='';
-  var admin=dashIsAdmin();
+  // parte 38: o envio de bases (upload) é exclusivo do administrador e fica na aba Dashboard
+  var admin=dashIsOwner();
   var kind=dashUpKind;
   function kindLabel(v,txt){ return '<label class="'+(kind===v?'on':'')+'"><input type="radio" name="dashKind"'+(kind===v?' checked':'')+' onclick="dashSetKind(\''+v+'\')"> '+txt+'</label>'; }
   var kindSel=
@@ -7471,14 +7512,20 @@ function renderDashboard(){
       'A escala funciona porque a regra dela já foi publicada; falta publicar a deste painel.'+
     '</div>'
   ) : '';
+  if(_upHost){
+    _upHost.innerHTML = admin ? (
+      '<div class="dsh-head"><div><h2>📥 Upload de bases</h2>'+
+      '<p class="dsh-sub">Envio dos arquivos de base da plataforma (lista de atendimentos e protocolos). Os dados enviados aparecem no Banco de Dados e no seletor automático de prontuários.</p></div></div>'+
+      fbWarn + uploadCard
+    ) : '';
+  }
   v.innerHTML =
     '<div class="card">'+
       dashEditoresPanelHtml()+
-      fbWarn+
       '<div class="dsh-head"><div><h2>📊 Banco de Dados</h2>'+
       '<p class="dsh-sub">Todos os atendimentos realizados no hospital no período selecionado — filtre por clínica, tipo de atendimento, sexo e quais evoluíram para internação. Inclui diagnósticos (CID), tempo de internação, perfil dos pacientes (idade e sexo) e desfechos. Dados compartilhados com a equipe.</p></div>'+
       '<div class="dsh-filters" id="dashFilters"></div></div>'+
-      uploadCard+
+      (admin?'<div style="margin:0 0 14px;font-size:12.5px;color:var(--muted)">📥 Para enviar ou substituir bases, use <a href="#" onclick="_dashAdmSecao=\'upload\';abrirDashboardAdmin();return false" style="color:var(--accent);font-weight:700">Dashboard → Upload de bases</a>.</div>':'')+
       '<div id="dashBody"></div>'+
     '</div>';
   // mês de destino padrão = mês atual, se ainda não escolhido
@@ -7681,7 +7728,7 @@ function dashDraw(){
   if(!window.Chart && dashData.length){ /* Chart.js pode ainda estar carregando */ }
   if(!dashData.length){
     var _extra=(dashVis('sepse')?dashSepseBlockHtml():'')+(dashVis('sibilancia')?dashSibBlockHtml():'')+(dashVis('proto')?dashProtoBlockHtml():'');
-    body.innerHTML='<div class="dsh-empty">Nenhum dado de internação ainda.'+(dashIsAdmin()?' Importe um arquivo CSV ou Word acima para começar.':' Assim que o escalista importar os dados, eles aparecem aqui.')+'</div>'+_extra;
+    body.innerHTML='<div class="dsh-empty">Nenhum dado de internação ainda.'+(dashIsAdmin()?' O administrador importa a planilha em Dashboard → Upload de bases.':' Assim que o escalista importar os dados, eles aparecem aqui.')+'</div>'+_extra;
     if(_extra){
       if(window.Chart){ var _isLight=!document.body.classList.contains('dark'); Chart.defaults.color=_isLight?'#475569':'#94a3b8'; Chart.defaults.borderColor=_isLight?'rgba(15,23,42,.08)':'rgba(148,163,184,.15)'; }
       if(dashVis('sepse')) dashSepseDraw();
