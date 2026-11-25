@@ -2607,6 +2607,14 @@ async function conviteCriar(){
     if(nome.length<3 || nome.length>120) throw new Error('Informe o nome completo (3 a 120 caracteres).');
     if(!mLoginValido(login)) throw new Error('Login inválido: 3 a 30 letras minúsculas/números, sem espaço ou acento.');
     if(loginOcupado(login)) throw new Error('Esse login já existe (ou está em "Removidos" — use "Excluir definitivamente" para liberá-lo).');
+    // 2026-11-25: convite + conta clássica para o MESMO login cria DUAS contas no Authentication
+    // (a Google do convite trava a conta com senha pelas regras). Quem já tem usuário e senha
+    // vincula o Gmail no 1º "Entrar com Google" (confirma a senha) → mesmo uid.
+    // Depende de "Proteção contra enumeração de e-mails" DESLIGADA no Authentication (com ela ligada, a consulta volta vazia).
+    var _metodos=null;
+    try{ _metodos=await fbAuth.fetchSignInMethodsForEmail(authEmail(login)); }catch(e){ _metodos=null; }
+    if(_metodos===null) throw new Error('Não foi possível verificar se já existe conta com senha para este login. Tente de novo.');
+    if(_metodos.length) throw new Error('Já existe conta com usuário e senha para "'+login+'" (Firebase → Authentication). NÃO crie convite: passe o usuário e a senha provisória. No 1º "Entrar com Google", a pessoa confirma usuário + senha e o Gmail fica VINCULADO a essa mesma conta.');
     if(!MEMBRO_PAPEIS[papel]) papel='membro';
     var code=conviteCodigo(), agora=Date.now();
     var pub=fbDB.ref('membros_publico').push().key;
@@ -2643,6 +2651,14 @@ async function convitesCarregar(){
     var agora=Date.now();
     var lista=Object.keys(v).map(function(k){ var c=v[k]||{}; c.code=k; return c; }).sort(function(a,b){ return (b.criadoEm||0)-(a.criadoEm||0); });
     if(!lista.length){ el.innerHTML='Nenhum convite criado ainda.'; return; }
+    // 2026-11-25: conflito = convite ainda "segurando" o login (login_uid pendente ou = conta Google do convite)
+    // E existe conta com usuário e senha para o mesmo login → a conta com senha fica travada pelas regras.
+    var conflito={}, lu={};
+    try{ lu=(await fbDB.ref('login_uid').once('value')).val()||{}; }catch(e){ lu={}; }
+    await Promise.all(lista.slice(0,20).map(async function(c){
+      var r=lu[c.login]; if(!r || !(r==='pendente' || r===c.usadoPor)) return;
+      try{ var mt=await fbAuth.fetchSignInMethodsForEmail(authEmail(c.login)); if(mt && mt.indexOf('password')>=0) conflito[c.code]=true; }catch(e){}
+    }));
     var h='<div class="tablewrap"><table><thead><tr><th>Nome</th><th>Login</th><th>Situação</th><th></th></tr></thead><tbody>';
     lista.slice(0,20).forEach(function(c){
       var sit, acoes='';
@@ -2654,11 +2670,49 @@ async function convitesCarregar(){
         acoes='<button class="secondary" style="padding:5px 10px" data-link="'+escapeHtml(conviteLink(c.code))+'" onclick="conviteCopiar(this)">📋 Link</button> '
           +'<button class="secondary" style="padding:5px 10px;color:var(--red)" data-code="'+escapeHtml(c.code)+'" onclick="conviteCancelar(this.dataset.code)">Cancelar</button>';
       }
+      if(conflito[c.code]){
+        sit+='<br><b style="color:var(--red)">⚠ Conflito: já existe conta com usuário e senha para este login — ela está travada pelo convite.</b>';
+        acoes='<button class="secondary" style="padding:5px 10px;color:var(--red)" data-code="'+escapeHtml(c.code)+'" onclick="conviteResolverConflito(this.dataset.code)">Manter conta com senha</button>';
+      }
       h+='<tr><td>'+escapeHtml(c.nome||'')+'</td><td style="font-family:\'DM Mono\',monospace">'+escapeHtml(c.login||'')+'</td><td>'+sit+'</td><td style="white-space:nowrap">'+acoes+'</td></tr>';
     });
     h+='</tbody></table></div>';
     el.innerHTML=h;
   }catch(e){ el.innerHTML='<span style="color:var(--red)">'+escapeHtml(mIsPermDenied(e)?'Sem permissão para ler convites (as regras novas do Firebase já foram publicadas?)':'Não foi possível carregar os convites.')+'</span>'; }
+}
+/* 2026-11-25: desfaz o convite que colidiu com uma conta com usuário e senha do MESMO login.
+   Mantém membro/autorizados. Libera a conta com senha (apaga login_uid/<login>) e, se o convite já
+   foi usado, solta a conta Google avulsa (apaga uid_login/<uid>). No próximo "Entrar com Google" a
+   pessoa cai em "Vincular conta Google", confirma usuário + senha, a conta Google avulsa é apagada
+   pelo próprio fluxo e o Gmail passa a ser provedor da conta original (mesmo uid). */
+async function conviteResolverConflito(code){
+  if(!/^[A-Za-z0-9_-]{24,64}$/.test(String(code||''))) return;
+  try{
+    if(!currentUser || currentUser.login!==OWNER_LOGIN) throw new Error('Apenas o presidente pode fazer isso.');
+    initFirebase(); await waitForAuth();
+    var c=(await fbDB.ref('convites/'+code).once('value')).val();
+    if(!c || !mLoginValido(c.login)) throw new Error('Convite não encontrado.');
+    var mt=await fbAuth.fetchSignInMethodsForEmail(authEmail(c.login));
+    if(!mt || mt.indexOf('password')<0) throw new Error('Não há conta com usuário e senha para "'+c.login+'". Nada a resolver.');
+    var msg=c.usadoPor
+      ? ('O convite de '+(c.nome||c.login)+' já foi usado pelo Google '+(c.emailGoogle||'')+'.\n\n'
+        +'Isto DESFAZ o convite: o login "'+c.login+'" volta a valer pela conta com usuário e senha.\n'
+        +'No próximo "Entrar com Google", a pessoa confirma usuário + senha e o Gmail fica VINCULADO à conta original.\n'
+        +'Se ela estiver com a plataforma aberta agora, vai precisar entrar de novo.\n\n'
+        +'Auditorias e perfil (gravados pelo login) não são afetados. Continuar?')
+      : ('O convite de '+(c.nome||c.login)+' não foi usado, mas está travando a conta com usuário e senha "'+c.login+'".\n\n'
+        +'Isto cancela o convite (o link deixa de funcionar) e libera a conta com senha. O membro continua ativo. Continuar?');
+    if(!confirm(msg)) return;
+    var upd={};
+    upd['login_uid/'+c.login]=null;
+    if(c.usadoPor) upd['uid_login/'+c.usadoPor]=null;
+    upd['convites/'+code+'/cancelado']=true;
+    await fbDB.ref().update(upd);
+    convitesCarregar();
+    alert('✔ Resolvido. Oriente '+(c.nome||c.login)+':\n1) Entrar com usuário "'+c.login+'" e a senha provisória (será pedida a troca), OU clicar em "Entrar com Google" e confirmar usuário + senha.\n2) Depois disso o Gmail fica vinculado e basta "Entrar com Google".');
+  }catch(e){
+    alert('Erro: '+(mIsPermDenied(e)?'permissão negada.':(e.message||e)));
+  }
 }
 async function conviteCancelar(code){
   if(!/^[A-Za-z0-9_-]{24,64}$/.test(String(code||''))) return;
