@@ -612,6 +612,13 @@ body.dark #hps-tour-hl.hps-tour-semalvo,body.dark #hps-tour-hl.hps-tour-iris{box
   button[onclick="showForgotInfo()"]{padding:12px 8px}
   #chatConvList>div:not([id]){font-size:11px!important}
 }
+/* 2026-11-25: no celular o "Sair" ficava fora da tela (barra de abas rolável) → fixo à direita */
+@media(max-width:760px){
+  #tab-sair{position:sticky;right:0;z-index:2;background:#fff;box-shadow:-12px 0 12px -8px rgba(12,32,58,.25);padding:0 14px}
+  body.dark #tab-sair{background:#0E1826}
+  .tabs.tabs-dir:has(#tab-sair[style*="flex"]),.tabs.com-sair.tabs-dir{-webkit-mask-image:none;mask-image:none}
+  .tabs.tabs-esq.tabs-dir:has(#tab-sair[style*="flex"]),.tabs.tabs-esq.tabs-dir.com-sair{-webkit-mask-image:linear-gradient(90deg,transparent,#000 40px);mask-image:linear-gradient(90deg,transparent,#000 40px)}
+}
 @media(max-width:600px){
   #chatWindow:not(.minimized){left:8px!important;right:8px!important;top:auto!important;bottom:8px!important;width:auto!important;height:min(78vh,560px)!important;min-width:0!important}
   #chatWindow.minimized{left:8px!important;right:8px!important;top:auto!important;bottom:8px!important;width:auto!important;min-width:0!important}
@@ -855,7 +862,7 @@ body.dark #verAviso{background:#1F6FEB}
         Não encontramos a conta Google <b id="vincGmail"></b> na plataforma.<br>
         <b>Já é auditor(a) e tem usuário e senha?</b> Digite-os <b>uma única vez</b> para ligar este Google à sua conta. Depois disso, é só usar "Entrar com Google".
       </div>
-      <div class="login-field"><label>Usuário</label><input id="vincUser" type="text" autocomplete="username" placeholder="Ex.: joaods" onkeydown="if(event.key==='Enter')vincularGoogleComSenha()"></div>
+      <div class="login-field"><label>Usuário</label><input id="vincUser" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Ex.: joaods" onkeydown="if(event.key==='Enter')vincularGoogleComSenha()"></div>
       <div class="login-field"><label>Senha atual</label><div class="pw-wrap"><input id="vincPass" type="password" autocomplete="current-password" placeholder="••••••••" onkeydown="if(event.key==='Enter')vincularGoogleComSenha()"></div></div>
       <button class="login-btn" id="btnVincular" onclick="vincularGoogleComSenha()">Vincular e entrar</button>
       <div id="vincErr" class="login-error"></div>
@@ -867,7 +874,7 @@ body.dark #verAviso{background:#1F6FEB}
       <div id="conviteAviso" style="display:none;background:#EAF7EE;border:1px solid #BFE3C8;border-radius:10px;padding:12px 14px;font-size:12.5px;color:#17633A;margin-bottom:14px;line-height:1.5">
         🎟️ <b>Você recebeu um convite</b> para a Comissão de Revisão de Prontuários. Clique em <b>Entrar com Google</b> abaixo e escolha a sua conta Google.
       </div>
-      <div class="login-field"><label>Usuário</label><input id="loginUser" type="text" placeholder="Ex.: João da Silva → joaods" onkeydown="tryLoginKey(event)" autocomplete="username"></div>
+      <div class="login-field"><label>Usuário</label><input id="loginUser" type="text" placeholder="Ex.: João da Silva → joaods" onkeydown="tryLoginKey(event)" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false"></div>
       <div class="login-field"><label>Senha</label><div class="pw-wrap"><input id="loginPass" type="password" placeholder="••••••••" onkeydown="tryLoginKey(event)" autocomplete="current-password"><button type="button" class="pw-eye" data-for="loginPass" title="Mostrar senha" onclick="togglePw('loginPass',this)">👁</button></div></div>
       <button class="login-btn" onclick="tryLogin()">Entrar</button>
       <div style="display:flex;align-items:center;gap:10px;margin:14px 0 10px;color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.06em"><span style="flex:1;height:1px;background:var(--line)"></span>OU<span style="flex:1;height:1px;background:var(--line)"></span></div>
@@ -1090,13 +1097,6 @@ body.dark #verAviso{background:#1F6FEB}
         <div style="background:var(--soft);border-radius:12px;padding:14px 16px;display:flex;gap:12px;align-items:flex-start">
           <span style="font-size:16px;flex-shrink:0">✅</span>
           <div>
-            <div style="font-size:13px;font-weight:700;color:var(--navy)">Proteção contra acessos automatizados (reCAPTCHA v3)</div>
-            <div style="font-size:12px;color:var(--muted);margin-top:3px">O Google reCAPTCHA v3 opera de forma invisível no login, bloqueando bots e tentativas automatizadas de acesso.</div>
-          </div>
-        </div>
-        <div style="background:var(--soft);border-radius:12px;padding:14px 16px;display:flex;gap:12px;align-items:flex-start">
-          <span style="font-size:16px;flex-shrink:0">✅</span>
-          <div>
             <div style="font-size:13px;font-weight:700;color:var(--navy)">Bloqueio após tentativas incorretas</div>
             <div style="font-size:12px;color:var(--muted);margin-top:3px">Após 5 tentativas incorretas de senha, o acesso é bloqueado por 15 minutos para prevenir ataques de força bruta.</div>
           </div>
@@ -1197,16 +1197,6 @@ body.dark #verAviso{background:#1F6FEB}
           <div style="font-size:12px;font-weight:800;color:var(--navy)">Google Drive</div>
           <div style="font-size:11px;color:var(--muted);margin-top:3px">Armazenamento de anexos</div>
         </div>
-        <div style="background:var(--soft);border-radius:12px;padding:14px;text-align:center">
-          <div style="font-size:22px;margin-bottom:6px">🤖</div>
-          <div style="font-size:12px;font-weight:800;color:var(--navy)">reCAPTCHA v3</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:3px">Proteção contra bots</div>
-        </div>
-        <div style="background:var(--soft);border-radius:12px;padding:14px;text-align:center">
-          <div style="font-size:22px;margin-bottom:6px">✉️</div>
-          <div style="font-size:12px;font-weight:800;color:var(--navy)">EmailJS</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:3px">Recuperação de senha por e-mail</div>
-        </div>
       </div>
     </div>
 
@@ -1280,8 +1270,6 @@ body.dark #verAviso{background:#1F6FEB}
 })();
 </script>
 
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
-<script src="https://www.google.com/recaptcha/api.js?render=6Lf3GUAtAAAAF2Cvs_LkZKIF0MK9zs9sFTtYDqf"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -2472,7 +2460,12 @@ async function vincularGoogleComSenha(){
   try{
     initFirebase();
     try{ await fbAuth.signInWithEmailAndPassword(authEmail(user), pass); }
-    catch(e){ registerFailedAttempt(); if(err) err.textContent='Usuário ou senha incorretos.'; return; }
+    catch(e){
+      var _c=(e&&e.code)||'';
+      if(_c==='auth/network-request-failed'){ if(err) err.textContent='Sem conexão com a internet. Tente de novo.'; return; }
+      if(_c==='auth/too-many-requests'){ if(err) err.textContent='Muitas tentativas. Aguarde alguns minutos.'; return; }
+      registerFailedAttempt(); if(err) err.textContent='Usuário ou senha incorretos.'; return;
+    }
     var acesso=await membroVerificarAcesso(user);
     if(!acesso.ok){ try{ await fbAuth.signOut(); }catch(e){} registerFailedAttempt(); if(err) err.textContent='Seu acesso à plataforma não está ativo. Procure a presidência da Comissão.'; return; }
     try{
@@ -3281,6 +3274,9 @@ async function tryLogin(){
     try{
       await fbAuth.signInWithEmailAndPassword(authEmail(user), pass);
     }catch(e){
+      var _c=(e&&e.code)||'';
+      if(_c==='auth/network-request-failed'){ err.textContent='Sem conexão com a internet. Verifique o Wi-Fi/dados e tente de novo.'; return; }
+      if(_c==='auth/too-many-requests'){ err.textContent='Muitas tentativas. Por segurança, o acesso a este usuário foi pausado por alguns minutos.'; return; }
       registerFailedAttempt();
       err.textContent='Usuário ou senha incorretos.';
       return;
@@ -3317,9 +3313,20 @@ function tryLoginKey(e){ if(e.key==='Enter') tryLogin(); }
 const INACTIVITY_LIMIT = 60 * 60 * 1000; // 1 hora em ms
 let _inactivityTimer = null;
 
-function startInactivityTimer(){
-  clearInactivityTimer();
-  _inactivityTimer = setTimeout(async function(){
+/* 2026-11-25: no celular (iOS/Android) os timers PARAM com a aba em segundo plano e a aba pode ser
+   recarregada pelo sistema — a sessão nunca expirava. Agora a última atividade fica gravada
+   (sessionStorage) e é conferida ao voltar para a aba, ao recarregar e a cada minuto. */
+const ULTIMA_ATIV_KEY='hps_ultima_atividade';
+let _expirando=false;
+function atividadeMarcar(){ try{ sessionStorage.setItem(ULTIMA_ATIV_KEY, String(Date.now())); }catch(e){} }
+function atividadeVencida(){
+  var t=0; try{ t=parseInt(sessionStorage.getItem(ULTIMA_ATIV_KEY)||'0',10)||0; }catch(e){}
+  return !!t && (Date.now()-t)>=INACTIVITY_LIMIT;
+}
+function inatividadeConferir(){ if(currentUser && !_expirando && atividadeVencida()) inatividadeExpirar(); }
+async function inatividadeExpirar(){
+  if(_expirando) return; _expirando=true;
+  try{
     if(currentUser){
       // parte 32: antes de encerrar, guarda no SERVIDOR (rascunhos/<login>) a auditoria em andamento
       var tinha=false; try{ tinha=!!rascunhoEstado(); }catch(e){}
@@ -3329,14 +3336,26 @@ function startInactivityTimer(){
         ? 'Sua sessão foi encerrada após 1 hora sem uso.\n\nA auditoria em andamento foi guardada no servidor (não neste computador). Ao entrar novamente, em qualquer computador, você poderá continuar de onde parou.'
         : 'Sua sessão expirou por inatividade. Faça login novamente.');
     }
-  }, INACTIVITY_LIMIT);
+  } finally { _expirando=false; try{ sessionStorage.removeItem(ULTIMA_ATIV_KEY); }catch(e){} }
+}
+function startInactivityTimer(){
+  clearInactivityTimer();
+  _inactivityTimer = setTimeout(inatividadeExpirar, INACTIVITY_LIMIT);
 }
 
+var _ultimaGravacaoAtiv=0;
 function resetInactivityTimer(){
   if(!currentUser) return;
+  if(atividadeVencida()){ inatividadeExpirar(); return; }   // voltou depois do prazo: encerra em vez de renovar
+  var agora=Date.now();
+  if(agora-_ultimaGravacaoAtiv>5000){ _ultimaGravacaoAtiv=agora; atividadeMarcar(); }
   clearInactivityTimer();
   startInactivityTimer();
 }
+document.addEventListener('visibilitychange', function(){ if(!document.hidden) inatividadeConferir(); });
+window.addEventListener('pageshow', inatividadeConferir);
+window.addEventListener('focus', inatividadeConferir);
+setInterval(inatividadeConferir, 60000);
 
 function clearInactivityTimer(){
   if(_inactivityTimer){ clearTimeout(_inactivityTimer); _inactivityTimer=null; }
@@ -3359,6 +3378,7 @@ function updateColetaTabLabel(){
 function completeLogin(user){
   clearLoginAttempts();
   try{ dataAuditoriaGarantir(); }catch(e){}
+  atividadeMarcar(); _ultimaGravacaoAtiv=Date.now();
   startInactivityTimer(); // iniciar timer de expiração por inatividade
   currentUser={login:user, name:USUARIOS[user]};
   sessionStorage.setItem('hps_user', JSON.stringify(currentUser));
@@ -3398,6 +3418,7 @@ function completeLogin(user){
   updateSobreWelcome();
   const sairBtn=$('tab-sair');
   if(sairBtn) sairBtn.style.display='flex';
+  try{ document.querySelector('.tabs').classList.add('com-sair'); }catch(e){}
   const epiBtn=$('tab-epidemio'); if(epiBtn) epiBtn.style.display='flex';
   abasAplicar(); cfgPlatCarregar();
   try{ if(!podeVerResultados()) dashPurgarCacheLocal(); }catch(e){}   // parte 39
@@ -3592,6 +3613,7 @@ function logout(){
   clearInactivityTimer();
   // Ocultar botão Sair, voltar para aba "sobre"
   const sairBtn=$('tab-sair'); if(sairBtn) sairBtn.style.display='none';
+  try{ document.querySelector('.tabs').classList.remove('com-sair'); }catch(e){}
   const epiBtn=$('tab-epidemio'); if(epiBtn) epiBtn.style.display='none';
   const dashAdmBtn=$('tab-analise'); if(dashAdmBtn) dashAdmBtn.style.display='none';
   var _rf=document.getElementById('resultadosFrame'); if(_rf){ _rf.removeAttribute('src'); _rf.removeAttribute('data-src'); }
@@ -3599,6 +3621,8 @@ function logout(){
   try{ renderRegimento(); }catch(e){}
   try{ if(typeof dashDetach==='function') dashDetach(); }catch(e){}
   try{ cfgPlatDesligar(); }catch(e){}
+  try{ dashPurgarCacheLocal(); }catch(e){}   // 2026-11-25: dados de paciente não ficam no aparelho após sair
+  try{ sessionStorage.removeItem(ULTIMA_ATIV_KEY); }catch(e){}
   // 2026-10-12: limpa a busca de atendimento (dados de paciente não ficam na tela após sair)
   try{ var _bw=document.getElementById('dbBuscaWrap'); if(_bw) _bw.innerHTML=''; var _vd=document.getElementById('view-dashboard'); if(_vd) _vd.innerHTML=''; _dbBuscaVolta=false; }catch(e){}
   __dashAttached=false;
@@ -5834,10 +5858,17 @@ if(_saved){
     // Mostrar botão Sair
     var _sb=document.getElementById('tab-sair');
     if(_sb) _sb.style.display='flex';
+    try{ document.querySelector('.tabs').classList.add('com-sair'); }catch(e){}
     var _epi=document.getElementById('tab-epidemio'); if(_epi) _epi.style.display='flex';
     abasAplicar(); cfgPlatCarregar();
     updateColetaTabLabel();
-    afterLogin().then(()=>{ updateSobreWelcome(); });
+    if(atividadeVencida()){ inatividadeExpirar(); }
+    else {
+      startInactivityTimer();
+      afterLogin().then(()=>{ updateSobreWelcome(); });
+      // 2026-11-25: a tela vinha de sessionStorage sem conferir se o Firebase ainda tem a sessão
+      waitForAuth().then(function(u){ if(!u && currentUser){ try{ logout(); }catch(e){} } });
+    }
   }catch(e){}
 }
 
