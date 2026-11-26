@@ -179,6 +179,7 @@ body.embed-resultados .panel-head .filters{ display:none !important; }
   </div>
   <nav class="tabs">
     <button class="tab active" onclick="show('dashboard');dash()">📊 Dashboard Geral</button>
+    <button class="tab" id="tabRevisoes" onclick="show('revisoes');revDash()">🔎 Revisões de auditorias</button>
   </nav>
   <button onclick="dashLogout()" style="border:1.5px solid var(--red);background:transparent;border-radius:10px;padding:6px 16px;font-size:12px;font-weight:700;cursor:pointer;color:var(--red);font-family:'DM Sans',sans-serif;white-space:nowrap;flex-shrink:0" onmouseover="this.style.background='#FDEEEE'" onmouseout="this.style.background='transparent'">Sair</button>
 </div>
@@ -189,6 +190,9 @@ body.embed-resultados .panel-head .filters{ display:none !important; }
   <div id="auditoresOnline" style="margin-bottom:18px"></div>
   <div id="resultadosCurator" style="margin-bottom:18px"></div>
   <div id="dash"></div>
+</section>
+<section id="revisoes" class="page">
+  <div id="revDash"></div>
 </section>
 </main>
 
@@ -874,7 +878,7 @@ function persist(){localStorage.setItem(KEY,JSON.stringify(data))}
 function show(id){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   $(id).classList.add('active');
-  const map={dashboard:0};
+  const map={dashboard:0,revisoes:1};
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',i===map[id]));
 }
 function norm(v){
@@ -2114,6 +2118,7 @@ async function renderAuditoresPanel(online){
     // Encerrar também a sessão do Firebase Auth
     if(fbAuth){ try{ fbAuth.signOut(); }catch(e){ console.warn('signOut:', e.message); } }
     clearDashInactivity();
+    try{ rvdData=[]; rvdFiltrados=[]; var _rd=document.getElementById('revDash'); if(_rd) _rd.innerHTML=''; show('dashboard'); }catch(e){}   // parte 40
     const pu=document.getElementById('dashUser'); if(pu) pu.value='';
     const pp=document.getElementById('dashPass'); if(pp) pp.value='';
     const pe=document.getElementById('dashAuthErr'); if(pe) pe.textContent='';
@@ -2161,5 +2166,239 @@ function clearDashInactivity(){
   Dúvidas ou problemas: entre em contato com o administrador da plataforma.
 </footer>
 
+<script>
+/* ═══════════════════════════════════════════ REVISÕES DE AUDITORIAS (2026-11-26, parte 40)
+   Aba exclusiva do administrador: lê revisoes/<nº> (regras v34: só o uid do owner) e mostra a concordância
+   entre o auditor e a revisão cega, com os mesmos filtros da "Base de prontuários auditados".
+   A comparação é RECALCULADA aqui a partir de rev/aud (mesma lógica do index.html), não depende do resumo gravado.
+   Filtros de setor, tipo de internação, desfecho e prontuário usam a IDENTIFICAÇÃO DA REVISÃO (o valor correto);
+   os filtros de data usam a data da AUDITORIA. */
+const RVD_OWNER_UID='vikRnCmEpoV3Pity3oc70ouG0n63';
+const RVD_IDENT=[['setor_auditado','Setor(es) auditado(s)'],['tipo_internacao','Tipo de internação'],['dias_internacao','Dias de internação'],['desfecho','Desfecho'],['tipo_prontuario','Tipo de prontuário']];
+let rvdData=[], rvdFiltrados=[], rvdErro=null;
+let rvdF={auditor:'',setor:'',desfecho:'',tipoInt:'',pront:'',status:'',conc:'',ano:'',mes:'',dia:''};
+function rvdNorm(v){ const n=norm(v); return (n==='sim'||n==='nao'||n==='na')?n:''; }
+function rvdLbl(n){ return n==='sim'?'Sim':n==='nao'?'Não':n==='na'?'N/A':''; }
+function rvdChaves(){ const k=[]; ITEMS.forEach(i=>k.push('item_'+i.num)); ITEMS_FISICO.forEach(i=>k.push('fis_item_'+i.num)); return k.concat(allMultiKeys()); }
+function rvdRotulo(k){
+  let m=/^item_(\d+)$/.exec(k); if(m){ const it=ITEMS.find(i=>i.num===+m[1]); return {sec:'Itens online', txt:it?it.num+'. '+it.text:k}; }
+  m=/^fis_item_(\d+)$/.exec(k); if(m){ const f=ITEMS_FISICO.find(i=>i.num===+m[1]); return {sec:'Itens físicos', txt:f?'F'+f.num+'. '+f.text:k}; }
+  for(const eq of EQUIPES){
+    if(eq.keyPresenca===k) return {sec:'Multiprofissional — '+eq.label, txt:eq.presencaText};
+    for(const si of eq.subItens){ if(si.key===k) return {sec:'Multiprofissional — '+eq.label, txt:'↳ '+si.text};
+      for(const ss of si.subSub){ if(ss.key===k) return {sec:'Multiprofissional — '+eq.label, txt:'↳↳ '+ss.text}; } } }
+  const p=RVD_IDENT.find(x=>x[0]===k); if(p) return {sec:'Identificação', txt:p[1]};
+  return {sec:'Outros', txt:k};
+}
+function rvdNormIdent(k,v){
+  const s=String(v==null?'':v).trim();
+  if(k==='setor_auditado') return s.split('|').map(x=>x.trim()).filter(Boolean).sort().join(' | ');
+  if(k==='dias_internacao'){ const n=s.replace(/[^0-9]/g,''); return n===''?'':String(parseInt(n,10)); }
+  if(k==='tipo_prontuario') return s.toLowerCase();
+  return s;
+}
+function rvdComparar(rev, aud){
+  rev=rev||{}; aud=aud||{};
+  const linhas=[], r={comparados:0,concordantes:0,divergentes:0,omitidos:0,extras:0,div_sim_nao:0,div_nao_sim:0,div_na:0,ident_comparados:0,ident_div:0,identDivCampos:[],divItens:[]};
+  RVD_IDENT.forEach(([k,t])=>{
+    const a=rvdNormIdent(k,aud[k]), v=rvdNormIdent(k,rev[k]); if(!a && !v) return;
+    const st=(a&&v)?(a===v?'ok':'div'):(!a?'omit':'extra');
+    if(st==='ok'||st==='div'){ r.ident_comparados++; if(st==='div'){ r.ident_div++; r.identDivCampos.push(k); } }
+    linhas.push({k,sec:'Identificação',txt:t,a:String(aud[k]==null?'':aud[k]),r:String(rev[k]==null?'':rev[k]),st,ident:true});
+  });
+  rvdChaves().forEach(k=>{
+    const a=rvdNorm(aud[k]), v=rvdNorm(rev[k]); if(!a && !v) return;
+    const st=(a&&v)?(a===v?'ok':'div'):(!a?'omit':'extra'); let tipo='';
+    if(st==='ok'){ r.comparados++; r.concordantes++; }
+    else if(st==='div'){ r.comparados++; r.divergentes++; r.divItens.push(k);
+      if(a==='sim'&&v==='nao'){ r.div_sim_nao++; tipo='sim_nao'; } else if(a==='nao'&&v==='sim'){ r.div_nao_sim++; tipo='nao_sim'; } else { r.div_na++; tipo='na'; } }
+    else if(st==='omit') r.omitidos++; else r.extras++;
+    const rot=rvdRotulo(k);
+    linhas.push({k,sec:rot.sec,txt:rot.txt,a:rvdLbl(a),r:rvdLbl(v),st,tipo,av:a,rv:v});
+  });
+  r.pct=r.comparados?Math.round(r.concordantes/r.comparados*100):null;
+  return {linhas,resumo:r};
+}
+function rvdDataISO(s){
+  s=String(s==null?'':s).trim();
+  let m=/^(\d{4})-(\d{2})-(\d{2})/.exec(s); if(m) return m[1]+'-'+m[2]+'-'+m[3];
+  m=/^(\d{2})\/(\d{2})\/(\d{4})/.exec(s); if(m) return m[3]+'-'+m[2]+'-'+m[1];
+  return '';
+}
+function rvdDataBR(s){ const iso=rvdDataISO(s); if(!iso) return String(s||''); const h=/(\d{2}:\d{2})/.exec(String(s)); return iso.slice(8,10)+'/'+iso.slice(5,7)+'/'+iso.slice(0,4)+(h?' '+h[1]:''); }
+function rvdSetores(o){ return String((o&&o.setor_auditado)||'').split('|').map(x=>x.trim()).filter(Boolean); }
+
+async function rvdCarregar(){
+  rvdErro=null; rvdData=[];
+  try{
+    initFirebase(); const u=await waitForAuth();
+    if(!u || u.uid!==RVD_OWNER_UID){ rvdErro='Acesso restrito ao administrador da plataforma.'; return; }
+    const s=await Promise.race([fbDB.ref('revisoes').once('value'), new Promise((_,rej)=>setTimeout(()=>rej(new Error('o Firebase não respondeu em 30 s')),30000))]);
+    const o=s.val()||{};
+    rvdData=Object.keys(o).filter(k=>o[k]).map(k=>{
+      const x=o[k], cmp=rvdComparar(x.rev, x.aud), rev=x.rev||{}, aud=x.aud||{};
+      return {num:String(x.numero_atendimento||k), auditor:String(x.auditor||'(sem nome)'), loginAud:String(x.login_auditor||''),
+        dataAud:String(x.data_auditoria||''), dataRev:String(x.data_revisao||''), isoAud:rvdDataISO(x.data_auditoria), status:String(x.status_auditoria||''),
+        setores:rvdSetores(rev).length?rvdSetores(rev):rvdSetores(aud), tipoInt:String(rev.tipo_internacao||aud.tipo_internacao||''),
+        desfecho:String(rev.desfecho||aud.desfecho||''), pront:String(rev.tipo_prontuario||aud.tipo_prontuario||'online').toLowerCase(),
+        dias:String(rev.dias_internacao||''), obs:String(rev.observacoes||''), rev, aud, cmp};
+    }).sort((a,b)=>String(b.dataRev).localeCompare(String(a.dataRev)));
+  }catch(e){
+    const den=!!e && (e.code==='PERMISSION_DENIED' || /permission[_ ]denied/i.test(String(e.message||'')));
+    rvdErro=den?'Sem permissão para ler as revisões (regras v34 publicadas? sessão do administrador?).':String((e&&e.message)||e);
+  }
+}
+function revDash(){
+  const root=$('revDash'); if(!root) return;
+  destroy();
+  root.innerHTML='<div class="panel empty">Carregando revisões…</div>';
+  rvdCarregar().then(()=>{
+    if(rvdErro){ root.innerHTML='<div class="panel empty">'+escapeHtml(rvdErro)+'<br><button class="secondary" style="margin-top:10px" onclick="revDash()">Tentar novamente</button></div>'; return; }
+    if(!rvdData.length){ root.innerHTML='<div class="panel empty">Nenhuma revisão registrada ainda.<br><span style="font-size:12px">Faça revisões em <b>Iniciar Auditoria → 🔎 Revisar auditoria</b>.</span><br><button class="secondary" style="margin-top:10px" onclick="revDash()">Atualizar</button></div>'; return; }
+    root.innerHTML='<div id="rvdConteudo"></div>';
+    rvdRender();
+  });
+}
+function rvdSetF(k,v){ rvdF[k]=v; rvdRender(); }
+function rvdLimparF(){ Object.keys(rvdF).forEach(k=>rvdF[k]=''); rvdRender(); }
+function rvdMatch(x){
+  const f=rvdF;
+  if(f.auditor && x.auditor!==f.auditor) return false;
+  if(f.setor && x.setores.indexOf(f.setor)<0) return false;
+  if(f.desfecho && x.desfecho!==f.desfecho) return false;
+  if(f.tipoInt && x.tipoInt!==f.tipoInt) return false;
+  if(f.pront && x.pront!==f.pront) return false;
+  if(f.status && x.status!==f.status) return false;
+  if(f.conc){ const p=x.cmp.resumo.pct; if(p===null) return false;
+    if(f.conc==='100' && p!==100) return false; if(f.conc==='90' && (p<90||p===100)) return false;
+    if(f.conc==='75' && (p<75||p>=90)) return false; if(f.conc==='baixa' && p>=75) return false; }
+  if(f.dia||f.mes||f.ano){ const iso=x.isoAud; if(!iso) return false;
+    if(f.dia && iso!==f.dia) return false; if(f.mes && iso.slice(5,7)!==f.mes) return false; if(f.ano && iso.slice(0,4)!==f.ano) return false; }
+  return true;
+}
+function rvdOpt(list,cur,lab){ const l=list.slice(); if(cur && l.indexOf(cur)<0) l.push(cur);
+  return l.map(v=>'<option value="'+escapeHtml(v)+'"'+(v===cur?' selected':'')+'>'+escapeHtml(lab?lab(v):v)+'</option>').join(''); }
+function rvdCor(p){ return p===null?'var(--muted)':p>=90?'var(--green)':p>=75?'var(--amber)':'var(--red)'; }
+function rvdAgreg(lista){
+  const t={n:lista.length,comp:0,conc:0,div:0,omit:0,sn:0,ns:0,na:0,identC:0,identD:0,comDiv:0};
+  lista.forEach(x=>{ const r=x.cmp.resumo; t.comp+=r.comparados; t.conc+=r.concordantes; t.div+=r.divergentes; t.omit+=r.omitidos;
+    t.sn+=r.div_sim_nao; t.ns+=r.div_nao_sim; t.na+=r.div_na; t.identC+=r.ident_comparados; t.identD+=r.ident_div; if(r.divergentes||r.ident_div) t.comDiv++; });
+  t.pct=t.comp?Math.round(t.conc/t.comp*100):null; t.divMedia=t.n?(t.div/t.n):0;
+  return t;
+}
+function rvdRender(){
+  destroy();
+  const c=$('rvdConteudo'); if(!c) return;
+  const coll=(a,b)=>String(a).localeCompare(String(b),'pt-BR');
+  const lista=rvdData.filter(rvdMatch); rvdFiltrados=lista;
+  const MES={'01':'Janeiro','02':'Fevereiro','03':'Março','04':'Abril','05':'Maio','06':'Junho','07':'Julho','08':'Agosto','09':'Setembro','10':'Outubro','11':'Novembro','12':'Dezembro'};
+  const oAud=[...new Set(rvdData.map(x=>x.auditor))].sort(coll), oSet=[...new Set(rvdData.flatMap(x=>x.setores))].sort(coll),
+    oDes=[...new Set(rvdData.map(x=>x.desfecho).filter(Boolean))].sort(coll), oTip=[...new Set(rvdData.map(x=>x.tipoInt).filter(Boolean))].sort(coll),
+    oAno=[...new Set(rvdData.map(x=>x.isoAud.slice(0,4)).filter(Boolean))].sort();
+  const T=rvdAgreg(lista);
+  // por auditor
+  const porAud=Object.entries(lista.reduce((m,x)=>{ (m[x.auditor]??=[]).push(x); return m; },{})).map(([k,v])=>Object.assign({k},rvdAgreg(v)))
+    .sort((a,b)=>(a.pct===null?101:a.pct)-(b.pct===null?101:b.pct) || b.n-a.n);
+  // por item (todas as chaves com ao menos 1 comparação)
+  const porItem={};
+  lista.forEach(x=>x.cmp.linhas.forEach(l=>{ if(l.ident) return; const o=porItem[l.k]??={k:l.k,sec:l.sec,txt:l.txt,comp:0,div:0,sn:0,ns:0,na:0,omit:0,aud:{}};
+    if(l.st==='ok'||l.st==='div'){ o.comp++; if(l.st==='div'){ o.div++; if(l.tipo==='sim_nao')o.sn++; else if(l.tipo==='nao_sim')o.ns++; else o.na++; o.aud[x.auditor]=(o.aud[x.auditor]||0)+1; } }
+    else if(l.st==='omit') o.omit++; }));
+  const itens=Object.values(porItem).filter(o=>o.div>0||o.omit>0).sort((a,b)=>(b.div/b.comp||0)-(a.div/a.comp||0) || b.div-a.div);
+  // identificação
+  const porIdent={}; lista.forEach(x=>x.cmp.linhas.forEach(l=>{ if(!l.ident) return; const o=porIdent[l.k]??={txt:l.txt,comp:0,div:0}; if(l.st==='ok'||l.st==='div'){ o.comp++; if(l.st==='div') o.div++; } }));
+  const sel=(id,k,ph,opts)=>'<select class="basef" onchange="rvdSetF(\''+k+'\',this.value)"><option value="">'+ph+'</option>'+opts+'</select>';
+  const f=rvdF;
+  c.innerHTML=`
+  <div class="panel">
+    <div class="panel-head"><div><h2>🔎 Revisões de auditorias</h2><p class="sub">Revisão cega feita pelo administrador × resposta do auditor. Concordância = itens com a mesma resposta ÷ itens respondidos pelos dois (N/A conta como resposta). A auditoria original não é alterada.</p></div>
+      <div class="filters"><button class="secondary" onclick="revDash()">Atualizar</button><button class="export" onclick="rvdExportCSV()">Exportar CSV</button></div></div>
+    <div style="border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--soft);margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+        <b style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">🔎 Filtrar revisões</b>
+        <div style="display:flex;gap:10px;align-items:center"><span style="font-size:11px;color:var(--muted)">${lista.length} de ${rvdData.length} revisão(ões)</span><button class="secondary" onclick="rvdLimparF()">Limpar filtros</button></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px">
+        ${sel('','auditor','Auditor — todos',rvdOpt(oAud,f.auditor))}
+        ${sel('','setor','Setor — todos',rvdOpt(oSet,f.setor,typeof secLabel==='function'?secLabel:null))}
+        ${sel('','desfecho','Desfecho — todos',rvdOpt(oDes,f.desfecho))}
+        ${sel('','tipoInt','Tipo de internação — todos',rvdOpt(oTip,f.tipoInt))}
+        ${sel('','pront','Prontuário — todos',['online','fisico','ambos'].map(v=>'<option value="'+v+'"'+(f.pront===v?' selected':'')+'>'+(v==='fisico'?'Físico':v==='ambos'?'Ambos':'Online')+'</option>').join(''))}
+        ${sel('','status','Auditoria — todas',[['completa','Finalizadas'],['parcial','Parciais']].map(([v,l])=>'<option value="'+v+'"'+(f.status===v?' selected':'')+'>'+l+'</option>').join(''))}
+        ${sel('','conc','Concordância — todas',[['100','100%'],['90','90–99%'],['75','75–89%'],['baixa','< 75%']].map(([v,l])=>'<option value="'+v+'"'+(f.conc===v?' selected':'')+'>'+l+'</option>').join(''))}
+        ${sel('','ano','Ano — todos',rvdOpt(oAno,f.ano))}
+        ${sel('','mes','Mês — todos',Object.keys(MES).map(m=>'<option value="'+m+'"'+(f.mes===m?' selected':'')+'>'+MES[m]+'</option>').join(''))}
+        <input type="date" class="basef" value="${escapeHtml(f.dia)}" onchange="rvdSetF('dia',this.value)" title="Data exata da auditoria (dia)">
+      </div>
+    </div>
+    ${lista.length?`
+    <div class="kpis">
+      <div class="kpi kpi-blue"><small>Auditorias revisadas</small><b>${T.n}</b><span>${T.comDiv} com ao menos 1 divergência (${T.n?Math.round(T.comDiv/T.n*100):0}%)</span></div>
+      <div class="kpi"><small>Concordância geral</small><b style="color:${rvdCor(T.pct)}">${T.pct===null?'—':T.pct+'%'}</b><span>${T.conc} de ${T.comp} itens</span></div>
+      <div class="kpi"><small>Divergências</small><b style="color:${T.div?'var(--red)':'var(--green)'}">${T.div}</b><span>média ${T.divMedia.toFixed(1).replace('.',',')} por auditoria</span></div>
+      <div class="kpi"><small>Sim→Não (conformidade indevida)</small><b>${T.sn}</b><span>Não→Sim: ${T.ns} · N/A: ${T.na}</span></div>
+      <div class="kpi"><small>Não respondidos pelo auditor</small><b>${T.omit}</b><span>Identificação divergente: ${T.identD}/${T.identC}</span></div>
+    </div>
+    <div class="charts-grid" style="grid-template-columns:1fr 1fr">
+      <div class="chart"><h3>Concordância por auditor</h3><div style="position:relative;height:${Math.max(160,porAud.length*34)}px"><canvas id="rvdCAud" style="max-height:none"></canvas></div></div>
+      <div class="chart"><h3>Itens com mais divergências (%)</h3><div style="position:relative;height:${Math.max(160,Math.min(10,itens.filter(o=>o.div>0).length)*34)}px"><canvas id="rvdCItem" style="max-height:none"></canvas></div></div>
+    </div>
+    <h3 style="margin:18px 0 8px">Por auditor</h3>
+    <div class="tablewrap"><table><thead><tr><th>Auditor</th><th>Revisões</th><th>Itens comparados</th><th>Divergências</th><th>Concordância</th><th>Div./auditoria</th><th>Sim→Não</th><th>Não→Sim</th><th>N/A</th><th>Não resp.</th><th>Identif. div.</th></tr></thead><tbody>
+      ${porAud.map(a=>`<tr style="cursor:pointer" onclick="rvdSetF('auditor',${escapeHtml(JSON.stringify(a.k))})" title="Filtrar por este auditor"><td><b>${escapeHtml(a.k)}</b></td><td style="text-align:center">${a.n}</td><td style="text-align:center">${a.comp}</td><td style="text-align:center">${a.div}</td><td style="text-align:center"><b style="color:${rvdCor(a.pct)}">${a.pct===null?'—':a.pct+'%'}</b></td><td style="text-align:center">${a.divMedia.toFixed(1).replace('.',',')}</td><td style="text-align:center">${a.sn}</td><td style="text-align:center">${a.ns}</td><td style="text-align:center">${a.na}</td><td style="text-align:center">${a.omit}</td><td style="text-align:center">${a.identD}/${a.identC}</td></tr>`).join('')}
+    </tbody></table></div>
+    <p class="sub" style="margin-top:6px">Poucas revisões por auditor dão percentuais instáveis — interprete com cautela abaixo de ~10 revisões.</p>
+    <h3 style="margin:18px 0 8px">Por item (itens com divergência ou lacuna)</h3>
+    <div class="tablewrap"><table><thead><tr><th>Seção</th><th>Item</th><th>Comparações</th><th>Divergências</th><th>%</th><th>Sim→Não</th><th>Não→Sim</th><th>N/A</th><th>Não resp.</th><th>Auditores com erro</th></tr></thead><tbody>
+      ${itens.length?itens.map(o=>{ const p=o.comp?Math.round(o.div/o.comp*100):0; return `<tr><td style="font-size:11px;color:var(--muted)">${escapeHtml(o.sec)}</td><td>${escapeHtml(o.txt)}</td><td style="text-align:center">${o.comp}</td><td style="text-align:center">${o.div}</td><td style="text-align:center"><b style="color:${p?'var(--red)':'var(--green)'}">${p}%</b></td><td style="text-align:center">${o.sn}</td><td style="text-align:center">${o.ns}</td><td style="text-align:center">${o.na}</td><td style="text-align:center">${o.omit}</td><td style="font-size:11px">${Object.entries(o.aud).sort((a,b)=>b[1]-a[1]).map(([n,q])=>escapeHtml(n)+' ('+q+')').join(', ')}</td></tr>`; }).join(''):'<tr><td colspan="10" style="text-align:center;padding:18px;color:var(--muted)">Nenhuma divergência nos itens. 🎉</td></tr>'}
+    </tbody></table></div>
+    ${Object.keys(porIdent).length?`<h3 style="margin:18px 0 8px">Identificação</h3><div class="tablewrap"><table><thead><tr><th>Campo</th><th>Comparações</th><th>Divergências</th></tr></thead><tbody>${Object.values(porIdent).map(o=>`<tr><td>${escapeHtml(o.txt)}</td><td style="text-align:center">${o.comp}</td><td style="text-align:center">${o.div}</td></tr>`).join('')}</tbody></table></div>`:''}
+    <h3 style="margin:18px 0 8px">Base de revisões <span style="font-size:11px;color:var(--muted);font-weight:600">— clique numa linha para ver a comparação completa</span></h3>
+    <div id="rvdDetalhe" style="display:none;margin-bottom:14px"></div>
+    <div class="tablewrap"><table><thead><tr><th>Data auditoria</th><th>Revisão</th><th>Atendimento</th><th>Setor</th><th>Tipo Int.</th><th>Prontuário</th><th>Auditor</th><th>Desfecho</th><th>Concord.</th><th>Div.</th></tr></thead><tbody>
+      ${lista.map((x,i)=>{ const r=x.cmp.resumo, tp=x.pront, tpc=tp==='fisico'?'var(--orange)':tp==='ambos'?'var(--purple)':'var(--blue)';
+        return `<tr style="cursor:pointer" onclick="rvdDetalhe(${i})"><td style="white-space:nowrap;font-size:12px">${escapeHtml(rvdDataBR(x.dataAud))}</td><td style="white-space:nowrap;font-size:12px">${escapeHtml(rvdDataBR(x.dataRev))}</td><td><b style="font-family:'DM Mono',monospace">${escapeHtml(x.num)}</b></td><td>${escapeHtml(typeof secLabel==='function'?secLabel(x.setores.join(' | ')):x.setores.join(' | '))}</td><td style="font-size:11px;color:var(--muted)">${escapeHtml(x.tipoInt)}</td><td><span style="background:${tpc}18;color:${tpc};border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700">${tp==='fisico'?'Físico':tp==='ambos'?'Ambos':'Online'}</span></td><td style="font-size:11px">${escapeHtml(x.auditor)}${x.status==='parcial'?' <span style="background:#FFF4E5;color:#C45000;border-radius:6px;padding:1px 6px;font-size:10px;font-weight:800">PARCIAL</span>':''}</td><td style="font-size:11px">${escapeHtml(x.desfecho)}</td><td><b style="color:${rvdCor(r.pct)}">${r.pct===null?'—':r.pct+'%'}</b></td><td style="text-align:center">${r.divergentes}${r.ident_div?' <span title="divergência na identificação" style="color:var(--red)">+'+r.ident_div+'id</span>':''}</td></tr>`; }).join('')}
+    </tbody></table></div>`
+    :'<div class="empty">Nenhuma revisão para os filtros selecionados.</div>'}
+  </div>`;
+  if(lista.length){
+    if(porAud.length) mkChart('rvdCAud','bar',porAud.map(a=>a.k+' ('+a.n+')'),[{data:porAud.map(a=>a.pct===null?0:a.pct),backgroundColor:porAud.map(a=>a.pct>=90?'rgba(23,138,74,.8)':a.pct>=75?'rgba(199,138,20,.8)':'rgba(199,54,47,.8)'),borderRadius:6}],{indexAxis:'y',scales:{x:{beginAtZero:true,max:100,ticks:{callback:v=>v+'%'}}}});
+    const top=itens.filter(o=>o.div>0).slice(0,10);
+    if(top.length) mkChart('rvdCItem','bar',top.map(o=>o.txt.substring(0,48)),[{data:top.map(o=>Math.round(o.div/o.comp*100)),backgroundColor:'rgba(199,54,47,.75)',borderRadius:6}],{indexAxis:'y',scales:{x:{beginAtZero:true,max:100,ticks:{callback:v=>v+'%'}}}});
+    else { const cv=$('rvdCItem'); if(cv) cv.parentElement.innerHTML='<div class="empty" style="padding:30px;font-size:13px">Nenhuma divergência 🎉</div>'; }
+  }
+}
+function rvdDetalhe(i){
+  const x=rvdFiltrados[i], box=$('rvdDetalhe'); if(!x||!box) return;
+  const r=x.cmp.resumo; let sec='', corpo='';
+  x.cmp.linhas.forEach(l=>{
+    if(l.sec!==sec){ sec=l.sec; corpo+='<tr><td colspan="4" style="background:var(--soft);font-size:11px;font-weight:800;text-transform:uppercase;color:var(--muted)">'+escapeHtml(sec)+'</td></tr>'; }
+    const bg=l.st==='div'?'#FDEEEE':l.st==='ok'?'':'#FFF7E8';
+    const b=l.st==='ok'?'<span style="color:var(--green);font-weight:800">✔ Concorda</span>':l.st==='div'?'<span style="color:var(--red);font-weight:800">✗ Diverge'+(l.tipo==='sim_nao'?' (Sim→Não)':l.tipo==='nao_sim'?' (Não→Sim)':l.tipo==='na'?' (N/A)':'')+'</span>':l.st==='omit'?'<span style="color:#C45000;font-weight:800">Auditor não respondeu</span>':'<span style="color:var(--muted)">Fora do escopo do revisor</span>';
+    corpo+='<tr style="background:'+bg+'"><td>'+escapeHtml(l.txt)+'</td><td style="text-align:center;font-weight:800">'+(escapeHtml(l.a)||'—')+'</td><td style="text-align:center;font-weight:800">'+(escapeHtml(l.r)||'—')+'</td><td>'+b+'</td></tr>';
+  });
+  box.style.display='block';
+  box.innerHTML='<div style="border:1.5px solid var(--line);border-radius:14px;padding:14px;background:var(--card)">'
+    +'<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px"><div><b>Atendimento '+escapeHtml(x.num)+'</b> · auditor <b>'+escapeHtml(x.auditor)+'</b> · auditado em '+escapeHtml(rvdDataBR(x.dataAud))+' · revisado em '+escapeHtml(rvdDataBR(x.dataRev))
+    +'<br><span style="font-size:12px">Concordância <b style="color:'+rvdCor(r.pct)+'">'+(r.pct===null?'—':r.pct+'%')+'</b> ('+r.concordantes+'/'+r.comparados+') · divergências '+r.divergentes+' · não respondidos '+r.omitidos+'</span></div>'
+    +'<button class="secondary" onclick="document.getElementById(\'rvdDetalhe\').style.display=\'none\'">Fechar</button></div>'
+    +'<div class="tablewrap"><table><thead><tr><th>Item</th><th>Auditor</th><th>Revisão</th><th>Resultado</th></tr></thead><tbody>'+corpo+'</tbody></table></div>'
+    +(x.obs?'<div style="margin-top:10px;font-size:12.5px"><b>Observações da revisão:</b> '+escapeHtml(x.obs)+'</div>':'')+'</div>';
+  try{ box.scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){}
+}
+function rvdExportCSV(){
+  const lista=rvdFiltrados||[]; if(!lista.length){ alert('Nenhuma revisão no recorte atual.'); return; }
+  const q=v=>{ let s=String(v==null?'':v); if(/^[=+\-@]/.test(s)) s="'"+s; return '"'+s.replace(/"/g,'""')+'"'; };
+  const chaves=rvdChaves();
+  const cab=['numero_atendimento','data_auditoria','data_revisao','auditor','status_auditoria','setor_revisao','tipo_internacao_revisao','desfecho_revisao','prontuario_revisao','concordancia_pct','comparados','divergentes','sim_nao','nao_sim','na','nao_respondidos','ident_divergente']
+    .concat(chaves.flatMap(k=>[k+'_auditor',k+'_revisao']));
+  const linhas=lista.map(x=>{ const r=x.cmp.resumo;
+    return [x.num,x.dataAud,x.dataRev,x.auditor,x.status,x.setores.join(' | '),x.tipoInt,x.desfecho,x.pront,r.pct===null?'':r.pct,r.comparados,r.divergentes,r.div_sim_nao,r.div_nao_sim,r.div_na,r.omitidos,r.identDivCampos.join(',')]
+      .concat(chaves.flatMap(k=>[rvdLbl(rvdNorm(x.aud[k])),rvdLbl(rvdNorm(x.rev[k]))])).map(q).join(';'); });
+  const csv=[cab.map(q).join(';')].concat(linhas).join('\n');
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='revisoes_auditorias.csv'; a.click(); URL.revokeObjectURL(a.href);
+}
+</script>
 </body>
 </html>

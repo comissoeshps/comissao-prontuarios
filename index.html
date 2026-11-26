@@ -668,6 +668,27 @@ body.dark #verAviso{background:#1F6FEB}
 #verAviso button:disabled{opacity:.6;cursor:default}
 @keyframes verEntra{from{opacity:0;transform:translate(-50%,12px)}to{opacity:1;transform:translate(-50%,0)}}
 @media (prefers-reduced-motion:reduce){#verAviso{animation:none}}
+/* parte 40 (2026-11-26): revisão cega — só administrador */
+#revModoBar{margin-top:14px}
+.rev-modos{display:flex;gap:8px;flex-wrap:wrap;background:var(--soft);border:1.5px solid var(--line);border-radius:14px;padding:6px}
+.rev-modos button{flex:1;min-width:180px;border:none;background:transparent;border-radius:10px;padding:9px 14px;font-size:13px;font-weight:800;cursor:pointer;color:var(--muted);font-family:'DM Sans',sans-serif}
+.rev-modos button.active{background:#fff;color:var(--navy);box-shadow:0 1px 4px rgba(0,0,0,.08)}
+body.dark .rev-modos button.active{background:#1A2638;color:#fff}
+#coletaForm.rev-ativo > *:not(.rev-keep){display:none !important}
+#coletaForm:not(.rev-ativo) #revisaoWrap{display:none}
+#coletaForm.rev-ativo #btnTourAuditoria{display:none}
+.rev-sec-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:6px}
+.rev-sec{display:flex;gap:8px;align-items:center;font-size:12.5px;border:1px solid var(--line);border-radius:10px;padding:7px 10px;cursor:pointer;background:var(--card)}
+.rev-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.rev-tab td{vertical-align:top}
+.rev-tab td.rev-c{text-align:center;font-weight:800;white-space:nowrap}
+.rev-sec-row td{background:var(--soft);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.rev-tr-div td{background:#FDEEEE}
+.rev-tr-omit td{background:#FFF7E8}
+body.dark .rev-tr-div td{background:#3d1212}
+body.dark .rev-tr-omit td{background:#3d2d0a}
+.rev-b{display:inline-block;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:800;white-space:nowrap}
+.rev-ok{background:#E8F7EF;color:var(--green)}.rev-div{background:#FDEEEE;color:var(--red)}.rev-omit{background:#FFF4E5;color:#C45000}.rev-extra{background:var(--soft);color:var(--muted)}
 </style>
 </head>
 <body>
@@ -920,7 +941,7 @@ body.dark #verAviso{background:#1F6FEB}
   <div id="coletaForm" style="display:none">
 
     <!-- Cabeçalho do auditor -->
-    <div class="panel" style="padding:14px 20px;margin-bottom:0">
+    <div class="panel rev-keep" style="padding:14px 20px;margin-bottom:0">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
         <div style="display:flex;align-items:center;gap:14px">
           <div id="headerAvatar" style="width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--cyan));display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;color:#fff;flex-shrink:0;overflow:hidden;border:2px solid var(--line)"></div>
@@ -935,6 +956,15 @@ body.dark #verAviso{background:#1F6FEB}
         </div>
       </div>
     </div>
+
+    <!-- parte 40: Auditar / Revisar (só administrador) -->
+    <div id="revModoBar" class="rev-keep" style="display:none">
+      <div class="rev-modos" role="tablist" aria-label="Modo da página de auditoria">
+        <button type="button" id="revBtnAuditar" class="active" onclick="revModo(false)">📝 Auditar prontuário</button>
+        <button type="button" id="revBtnRevisar" onclick="revModo(true)">🔎 Revisar auditoria (administrador)</button>
+      </div>
+    </div>
+    <div id="revisaoWrap" class="rev-keep"></div>
 
     <!-- Oferta do tour guiado no 1º acesso (some depois de Começar ou Agora não — perfis/<login>/tourAuditoriaVisto) -->
     <div id="tourOferta" style="display:none" role="region" aria-label="Tour guiado">
@@ -1992,10 +2022,19 @@ async function membrosAdicionar(){
     var login=String(document.getElementById('mNovoLogin').value||'').trim().toLowerCase();
     if(!MEMBROS_DB || !Object.keys(MEMBROS_DB).length) throw new Error('Importe a lista atual antes de adicionar alguém.');
     if(MEMBROS_DB && MEMBROS_DB[login]) throw new Error(MEMBROS_DB[login].removido===true?'Esse login está em "Removidos". Restaure ou use "Excluir definitivamente" para liberá-lo.':'Esse login já existe na lista. Edite a linha dele acima.');
+    if(!mLoginValido(login)) throw new Error('Login inválido: 3 a 30 letras minúsculas/números, sem espaço ou acento.');
+    // 2026-11-25: o Authentication é COMPARTILHADO com a CEM e a inscrição está aberta (convites Google).
+    //  • Sem conta ainda → liberar o acesso aqui ANTES de criar a conta deixa uma janela para um estranho criá-la.
+    //  • Conta já existe → pode ser de um membro da CEM; só a MESMA pessoa pode receber este login.
+    var _mt=null;
+    try{ _mt=await fbAuth.fetchSignInMethodsForEmail(authEmail(login)); }catch(e){ _mt=null; }
+    if(_mt===null) throw new Error('Não foi possível verificar a conta deste login no Authentication. Tente de novo.');
+    if(!_mt.length) throw new Error('Ainda não existe a conta "'+authEmail(login)+'". Crie PRIMEIRO em Firebase → Authentication → Usuários → Adicionar usuário (senha provisória) e só depois adicione aqui — assim ninguém consegue criar essa conta antes de você.');
+    if(!confirm('Já existe a conta "'+login+'" no Authentication.\n\nO cadastro é o MESMO da Comissão de Ética Médica: se esse login já é de alguém da CEM, essa pessoa passará a entrar aqui também, com a MESMA senha.\n\nSó continue se for a mesma pessoa que você está cadastrando. Continuar?')) return;
     if(loginExcluido(login)){ try{ await fbDB.ref('config_plataforma/excluidos/'+login).remove(); CFG_PLAT.excluidos[login]=false; }catch(e){} }
     await membroGravar(login,{nome:document.getElementById('mNovoNome').value,papel:document.getElementById('mNovoPapel').value,
       visivel:document.getElementById('mNovoVis').checked,auditor:document.getElementById('mNovoAud').checked,ativo:true});
-    await membrosAposGravar('✔ '+login+' adicionado. Se ainda não criou, falta só a conta no Firebase Authentication.');
+    await membrosAposGravar('✔ '+login+' adicionado. No 1º acesso a pessoa entra com usuário e a senha provisória e define a senha pessoal.');
   }catch(e){ mMsg('Erro ao adicionar: '+(mIsPermDenied(e)?'permissão negada (as regras novas do Firebase já foram publicadas?)':(e.message||e)),false); }
 }
 async function membrosImportar(){
@@ -2029,6 +2068,19 @@ async function membroAuthEmail(login){
   }catch(e){}
   return login+'@'+AUTH_EMAIL_DOMAIN;
 }
+/* 2026-11-25: o Authentication e o banco são COMPARTILHADOS com a Comissão de Ética Médica.
+   Quem também está na CEM não pode ter a conta de login apagada nem o login reaproveitado. */
+async function membroEhDaCem(login){
+  try{
+    var r=await Promise.all([fbDB.ref('cem_autorizados/'+login).once('value'), fbDB.ref('cem_admins/'+login).once('value')]);
+    return r[0].val()===true || r[1].val()===true;
+  }catch(e){ return null; }   // não deu para conferir
+}
+function avisoContaLogin(login, conta, cem){
+  if(cem===true) return ' ⚠ NÃO apague a conta de login no Authentication: "'+login+'" também é da Comissão de Ética Médica (apagar tiraria o acesso dele(a) à CEM).';
+  if(cem===null) return ' Antes de apagar a conta de login, confira se "'+login+'" não está em cem_autorizados/cem_admins (CEM usa o mesmo cadastro). Se não estiver: Firebase → Authentication → Usuários → '+conta+' → ⋮ → Excluir conta.';
+  return ' Para apagar também a conta de login: Firebase → Authentication → Usuários → '+conta+' → ⋮ → Excluir conta.';
+}
 async function membroRemover(login){
   try{
     if(!currentUser || currentUser.login!==OWNER_LOGIN) throw new Error('Apenas o presidente pode remover membros.');
@@ -2049,7 +2101,8 @@ async function membroRemover(login){
     await fbDB.ref().update(upd);
     MEMBROS_DB[login]=novo;
     var conta=await membroAuthEmail(login);
-    await membrosAposGravar('✔ '+(m.nome||login)+' removido(a). Para apagar também a conta de login: Firebase → Authentication → Usuários → '+conta+' → ⋮ → Excluir conta.');
+    var cem=await membroEhDaCem(login);
+    await membrosAposGravar('✔ '+(m.nome||login)+' removido(a) da Comissão de Prontuários.'+avisoContaLogin(login, conta, cem));
   }catch(e){ mMsg('Erro ao remover: '+(mIsPermDenied(e)?'permissão negada (as regras novas do Firebase já foram publicadas?)':(e.message||e)),false); }
 }
 
@@ -2063,7 +2116,8 @@ async function membroExcluirDefinitivo(login){
     var m=(MEMBROS_DB&&MEMBROS_DB[login]);
     if(!m || m.removido!==true) throw new Error('Remova o membro (🗑️) antes de excluir definitivamente.');
     var conta=await membroAuthEmail(login);
-    var digitado=prompt('EXCLUSÃO DEFINITIVA de '+(m.nome||login)+'\n\nApaga cadastro, perfil, foto, vínculo Google e convites deste login, e libera o login para reuso. NÃO tem como desfazer.\nAs auditorias já feitas continuam na planilha.\n\nPara confirmar, digite o login: '+login);
+    var cem=await membroEhDaCem(login);
+    var digitado=prompt('EXCLUSÃO DEFINITIVA de '+(m.nome||login)+'\n\nApaga cadastro, perfil, foto, vínculo Google e convites deste login'+(cem===true?' NA COMISSÃO DE PRONTUÁRIOS. Atenção: "'+login+'" também é da CEM — o acesso à CEM continua e o login NÃO fica livre para outra pessoa.':', e libera o login para reuso.')+' NÃO tem como desfazer.\nAs auditorias já feitas continuam na planilha.\n\nPara confirmar, digite o login: '+login);
     if(digitado===null) return;
     if(String(digitado).trim().toLowerCase()!==login){ mMsg('Exclusão cancelada: o login digitado não confere.',false); return; }
     initFirebase(); await waitForAuth();
@@ -2089,7 +2143,9 @@ async function membroExcluirDefinitivo(login){
     delete MEMBROS_DB[login];
     if(USUARIOS_RESERVA[login]){ CFG_PLAT.excluidos=CFG_PLAT.excluidos||{}; CFG_PLAT.excluidos[login]=true; }
     try{ localStorage.removeItem('profile_'+login); localStorage.removeItem('avatar_'+login); }catch(e){}
-    await membrosAposGravar('✔ '+(m.nome||login)+' excluído(a) definitivamente; o login "'+login+'" está livre. Falta apagar a conta de login: Firebase → Authentication → Usuários → '+conta+' → ⋮ → Excluir conta.');
+    await membrosAposGravar(cem===true
+      ? '✔ '+(m.nome||login)+' excluído(a) definitivamente da Comissão de Prontuários.'+avisoContaLogin(login, conta, cem)
+      : '✔ '+(m.nome||login)+' excluído(a) definitivamente; o login "'+login+'" está livre.'+avisoContaLogin(login, conta, cem));
     convitesCarregar();
   }catch(e){ mMsg('Erro ao excluir: '+(mIsPermDenied(e)?'permissão negada (as regras novas do Firebase já foram publicadas?)':(e.message||e)),false); }
 }
@@ -2607,7 +2663,9 @@ async function conviteCriar(){
     var _metodos=null;
     try{ _metodos=await fbAuth.fetchSignInMethodsForEmail(authEmail(login)); }catch(e){ _metodos=null; }
     if(_metodos===null) throw new Error('Não foi possível verificar se já existe conta com senha para este login. Tente de novo.');
-    if(_metodos.length) throw new Error('Já existe conta com usuário e senha para "'+login+'" (Firebase → Authentication). NÃO crie convite: passe o usuário e a senha provisória. No 1º "Entrar com Google", a pessoa confirma usuário + senha e o Gmail fica VINCULADO a essa mesma conta.');
+    if(_metodos.length) throw new Error('Já existe conta com usuário e senha para "'+login+'" (Firebase → Authentication — o cadastro é o mesmo da CEM). '
+      +'Se for a MESMA pessoa: NÃO crie convite; ela entra com esse usuário e senha (os mesmos da CEM, se já for de lá) e, no 1º "Entrar com Google", vincula o Gmail. '
+      +'Se for OUTRA pessoa: escolha outro login.');
     if(!MEMBRO_PAPEIS[papel]) papel='membro';
     var code=conviteCodigo(), agora=Date.now();
     var pub=fbDB.ref('membros_publico').push().key;
@@ -2776,6 +2834,7 @@ function abasAplicar(){
   var ok=podeVerResultados();
   b.style.display=ok?'flex':'none';
   if(!ok) dashAdmLimpar();
+  try{ revBarAplicar(); }catch(e){}
 }
 /* Esvazia a área do administrador (iframe + painel de upload) e sai dela se estiver aberta. */
 function dashAdmLimpar(){
@@ -3395,6 +3454,7 @@ function completeLogin(user){
   $('loginPanel').style.display='none';
   $('coletaForm').style.display='block';
   updateColetaTabLabel();
+  try{ revBarAplicar(); }catch(e){}
   const auditorInput=$('auditor');
   if(auditorInput){
     auditorInput.value=currentUser.name;
@@ -3591,6 +3651,7 @@ function logout(){
   }
   sessionStorage.removeItem('hps_user');
   currentUser=null;
+  try{ revSairLogout(); }catch(e){}   // parte 40: nada da revisão fica na tela
   // Encerrar a sessão do Firebase Auth (senão o usuário segue autenticado)
   if(fbAuth){ try{ fbAuth.signOut(); }catch(e){ console.warn('signOut:', e.message); } }
   // Limpar estado da troca de senha
@@ -5026,6 +5087,7 @@ function requestColeta(btn){
   if(currentUser){
     var lp=document.getElementById('loginPanel'); if(lp) lp.style.display='none';
     var cf=document.getElementById('coletaForm'); if(cf) cf.style.display='block';
+    try{ revBarAplicar(); }catch(e){}
     try{ if(typeof tourAuditoriaOfertaChecar==='function' && !_hpsTourAtivo) tourAuditoriaOfertaChecar(); }catch(e){}
   } else {
     var lp=document.getElementById('loginPanel'); if(lp) lp.style.display='block';
@@ -9027,5 +9089,360 @@ try{ conviteRotear(); }catch(e){}
 <!-- Toast (notificações do Perfil Epidemiológico) -->
 <div class="toast" id="toast"></div>
 
+<script>
+/* ═══════════════════════════════════════════ REVISÃO CEGA DE AUDITORIAS (2026-11-26, parte 40)
+   Exclusivo do administrador (gabrielcm). O administrador refaz a auditoria de um nº de atendimento SEM ver
+   as respostas nem o nome do auditor; ao finalizar, a plataforma compara campo a campo e mostra lado a lado.
+   Gravação: revisoes/<nº> = {rev (respostas do revisor), aud (cópia das respostas do auditor no momento da
+   revisão), resumo}. A auditoria original (auditorias/<nº>) NUNCA é alterada. Regras v34: só o uid do owner
+   lê e grava revisoes. Nada fica no navegador (estado só em memória). */
+var REV_OWNER_UID='vikRnCmEpoV3Pity3oc70ouG0n63';
+var REV_TIPOINT=['Clínica (eletiva)','Cirúrgica (eletiva)','Urgência / Emergência','Obstétrica','Pediátrica','Neonatal','Não se aplica (pronto-atendimento)'];
+var REV_DESFECHO=['Alta hospitalar','Transferência interna','Transferência externa','Óbito','Evasão','Em observação','Internação hospitalar','Em internação (auditoria parcial)'];
+var REV_IDENT=[['setor_auditado','Setor(es) auditado(s)'],['tipo_internacao','Tipo de internação'],['dias_internacao','Dias de internação'],['desfecho','Desfecho'],['tipo_prontuario','Tipo de prontuário']];
+var REV={ativo:false, num:'', aud:null, audFonte:'', existente:null, cur:{}, setores:[], tipo:'online', tipoInt:'', desfecho:'', dias:'', obs:'', fase:'busca', salvando:false, sujo:false, soDiv:false, ultima:null};
+
+function revEhOwner(){ return !!(currentUser && currentUser.login===OWNER_LOGIN); }
+function revUidOk(){ try{ return !!(fbAuth && fbAuth.currentUser && fbAuth.currentUser.uid===REV_OWNER_UID); }catch(e){ return false; } }
+function revEsc(s){ return escapeHtml(String(s==null?'':s)); }
+function revNorm(v){ var n=norm(v); return (n==='sim'||n==='nao'||n==='na')?n:''; }
+function revLbl(n){ return n==='sim'?'Sim':n==='nao'?'Não':n==='na'?'N/A':''; }
+
+/* ---- barra "Auditar / Revisar" (só o administrador vê) ---- */
+function revBarAplicar(){
+  var bar=document.getElementById('revModoBar'); if(!bar) return;
+  var ok=revEhOwner();
+  bar.style.display=ok?'':'none';
+  if(!ok && REV.ativo) revModo(false, true);
+}
+function revModo(on, forcar){
+  if(on && !revEhOwner()){ alert('Acesso restrito ao administrador da plataforma.'); return; }
+  if(!on && REV.ativo && REV.sujo && !forcar){
+    if(!confirm('A revisão em andamento ainda não foi finalizada.\n\nSair do modo revisão e DESCARTAR as respostas?')) return;
+  }
+  REV.ativo=!!on;
+  var cf=document.getElementById('coletaForm'); if(cf) cf.classList.toggle('rev-ativo', REV.ativo);
+  var b1=document.getElementById('revBtnAuditar'), b2=document.getElementById('revBtnRevisar');
+  if(b1) b1.classList.toggle('active', !REV.ativo);
+  if(b2) b2.classList.toggle('active', REV.ativo);
+  if(!REV.ativo){ revResetar(); }
+  else revRender();
+  try{ window.scrollTo({top:0,behavior:'smooth'}); }catch(e){}
+}
+function revResetar(){
+  REV.num=''; REV.aud=null; REV.audFonte=''; REV.existente=null; REV.cur={}; REV.setores=[]; REV.tipo='online';
+  REV.tipoInt=''; REV.desfecho=''; REV.dias=''; REV.obs=''; REV.fase='busca'; REV.salvando=false; REV.sujo=false; REV.soDiv=false; REV.ultima=null;
+  var w=document.getElementById('revisaoWrap'); if(w) w.innerHTML='';
+}
+/* chamado no logout: nada da revisão fica na tela */
+function revSairLogout(){ REV.ativo=false; revResetar(); var cf=document.getElementById('coletaForm'); if(cf) cf.classList.remove('rev-ativo'); var bar=document.getElementById('revModoBar'); if(bar) bar.style.display='none'; }
+
+/* ---- 1. carregar o nº de atendimento ---- */
+async function revCarregar(){
+  if(!revEhOwner()) return;
+  var inp=document.getElementById('revNum'); var num=String(inp?inp.value:'').trim();
+  var st=document.getElementById('revBuscaStatus');
+  function say(h){ if(st){ st.style.display='block'; st.innerHTML=h; } }
+  if(!AUD_KEY_RE.test(num)){ say('<div class="alert-box alert-partial"><span class="ic">⚠️</span><div>Número de atendimento inválido: use apenas números (sem espaços, pontos ou barras).</div></div>'); return; }
+  if(REV.sujo && num!==REV.num && !confirm('Há uma revisão em andamento (atendimento '+REV.num+') ainda não finalizada.\n\nDescartar e carregar o atendimento '+num+'?')) return;
+  say('<div style="font-size:13px;color:var(--muted)">⏳ Consultando a base de auditorias…</div>');
+  try{
+    initFirebase(); await waitForAuth();
+    if(!revUidOk()){ say('<div class="alert-box alert-partial"><span class="ic">⛔</span><div>Sessão do administrador não confirmada pelo Firebase. Saia e entre de novo.</div></div>'); return; }
+    var r=await revLerAuditoria(num);
+    if(r.erro){ say('<div class="alert-box alert-partial"><span class="ic">⚠️</span><div>'+revEsc(r.erro)+'</div></div>'); return; }
+    if(!r.row){ say('<div class="alert-box alert-partial"><span class="ic">🔎</span><div>O atendimento <b>'+revEsc(num)+'</b> não consta da base de auditorias. Só é possível revisar atendimentos já auditados.</div></div>'); return; }
+    var ex=null;
+    try{ ex=(await _audTeto(fbDB.ref('revisoes/'+num).once('value'), 15000, 'o Firebase não respondeu em 15 s')).val(); }
+    catch(e){ say('<div class="alert-box alert-partial"><span class="ic">⚠️</span><div>Não foi possível consultar revisões anteriores: '+revEsc(mIsPermDenied(e)?'permissão negada — as regras v34 já foram publicadas?':(e&&e.message)||e)+'</div></div>'); return; }
+    revResetarForm(); REV.num=num; REV.aud=r.row; REV.audFonte=r.fonte; REV.existente=ex||null;
+    REV.fase = ex ? 'existente' : 'form';
+    revRender();
+  }catch(e){
+    say('<div class="alert-box alert-partial"><span class="ic">⚠️</span><div>Erro ao consultar: '+revEsc((e&&e.message)||e)+'</div></div>');
+  }
+}
+function revResetarForm(){ REV.cur={}; REV.setores=[]; REV.tipo='online'; REV.tipoInt=''; REV.desfecho=''; REV.dias=''; REV.obs=''; REV.sujo=false; REV.soDiv=false; REV.ultima=null; }
+/* Lê a auditoria em auditorias/<nº>; se não houver, procura em auditorias_extra (linhas antigas sem chave própria). */
+async function revLerAuditoria(num){
+  var s=await _audTeto(fbDB.ref('auditorias/'+num).once('value'), 15000, 'o Firebase não respondeu em 15 s');
+  var v=s.val(); if(v) return {row:v, fonte:'auditorias'};
+  var sx=await _audTeto(fbDB.ref('auditorias_extra').once('value'), 30000, 'o Firebase não respondeu em 30 s');
+  var o=sx.val()||{}, achados=[];
+  Object.keys(o).forEach(function(k){ if(o[k] && String(o[k].numero_atendimento==null?'':o[k].numero_atendimento).trim()===num) achados.push(o[k]); });
+  if(achados.length>1) return {erro:'O atendimento '+num+' aparece '+achados.length+' vezes na base antiga (auditorias_extra). Revisão indisponível para nº duplicado.'};
+  if(achados.length===1) return {row:achados[0], fonte:'auditorias_extra'};
+  return {row:null};
+}
+
+/* ---- 2. formulário cego ---- */
+function revSet(k,v){ if(REV.fase!=='form') return; REV.cur[k]=(REV.cur[k]===v)?undefined:v; if(REV.cur[k]===undefined) delete REV.cur[k]; REV.sujo=true; revRenderForm(); }
+function revCampo(k,v){
+  if(k==='tipo'){ REV.tipo=v; }
+  else if(k==='tipoInt') REV.tipoInt=v; else if(k==='desfecho') REV.desfecho=v;
+  else if(k==='dias') REV.dias=String(v||'').replace(/[^0-9]/g,'').slice(0,4);
+  else if(k==='obs') REV.obs=String(v||'').slice(0,5000);
+  REV.sujo=true;
+  if(k==='tipo') revRenderForm();
+}
+function revToggleSetor(el){
+  var s=el.value, i=REV.setores.indexOf(s);
+  if(el.checked && i<0) REV.setores.push(s); if(!el.checked && i>=0) REV.setores.splice(i,1);
+  REV.setores.sort(function(a,b){ return SETORES.indexOf(a)-SETORES.indexOf(b); });
+  REV.sujo=true;
+}
+function revChoices(k, opts){
+  return '<div class="choices">'+opts.map(function(o){ var v=norm(o); var sel=REV.cur[k]===v;
+    return '<button type="button" class="choice'+(sel?' sel '+cls(v):'')+'" onclick="revSet(\''+k+'\',\''+v+'\')">'+o+'</button>'; }).join('')+'</div>';
+}
+/* chaves no escopo do revisor (o que precisa estar respondido) */
+function revEscopo(){
+  var on=REV.tipo!=='fisico', fis=REV.tipo!=='online', keys=[];
+  if(on) ITEMS.forEach(function(i){ keys.push('item_'+i.num); });
+  if(fis) ITEMS_FISICO.forEach(function(i){ keys.push('fis_item_'+i.num); });
+  EQUIPES.forEach(function(eq){
+    keys.push(eq.keyPresenca);
+    if(REV.cur[eq.keyPresenca]==='sim') eq.subItens.forEach(function(si){
+      keys.push(si.key);
+      if(REV.cur[si.key]==='sim') si.subSub.forEach(function(ss){ keys.push(ss.key); });
+    });
+  });
+  return keys;
+}
+function revRotulo(k){
+  var m=/^item_(\d+)$/.exec(k); if(m){ var it=ITEMS.find(function(i){return i.num===+m[1];}); return {sec:'Itens online', txt:(it?it.num+'. '+it.text:k)}; }
+  m=/^fis_item_(\d+)$/.exec(k); if(m){ var f=ITEMS_FISICO.find(function(i){return i.num===+m[1];}); return {sec:'Itens físicos', txt:(f?'F'+f.num+'. '+f.text:k)}; }
+  for(var e=0;e<EQUIPES.length;e++){ var eq=EQUIPES[e];
+    if(eq.keyPresenca===k) return {sec:'Multiprofissional — '+eq.label, txt:eq.presencaText};
+    for(var s=0;s<eq.subItens.length;s++){ var si=eq.subItens[s]; if(si.key===k) return {sec:'Multiprofissional — '+eq.label, txt:'↳ '+si.text};
+      for(var t=0;t<si.subSub.length;t++){ if(si.subSub[t].key===k) return {sec:'Multiprofissional — '+eq.label, txt:'↳↳ '+si.subSub[t].text}; } } }
+  for(var x=0;x<REV_IDENT.length;x++) if(REV_IDENT[x][0]===k) return {sec:'Identificação', txt:REV_IDENT[x][1]};
+  return {sec:'Outros', txt:k};
+}
+function revTodasChaves(){
+  var keys=[]; ITEMS.forEach(function(i){ keys.push('item_'+i.num); }); ITEMS_FISICO.forEach(function(i){ keys.push('fis_item_'+i.num); });
+  return keys.concat(allMultiKeys());
+}
+
+/* ---- render ---- */
+function revRender(){
+  var w=document.getElementById('revisaoWrap'); if(!w) return;
+  var h='<div class="panel rev-head-panel">'
+    +'<div class="panel-head"><div><h2>🔎 Revisão cega de auditoria</h2><p class="sub">Exclusivo do administrador. Informe o nº de atendimento de um prontuário já auditado e refaça a auditoria <b>sem ver</b> as respostas nem o nome do auditor. Ao finalizar, a plataforma mostra a comparação lado a lado. A auditoria original <b>não é alterada</b>.</p></div><span class="chip" style="background:#F1E9FF;color:#6B46C1">Somente administrador</span></div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">'
+    +'<div class="field" style="flex:1;min-width:200px;margin:0"><label>Número de atendimento</label><input id="revNum" type="text" inputmode="numeric" autocomplete="off" value="'+revEsc(REV.num)+'" placeholder="Ex.: 194337651" onkeydown="if(event.key===\'Enter\')revCarregar()"></div>'
+    +'<button type="button" class="primary" onclick="revCarregar()">Carregar</button>'
+    +(REV.num?'<button type="button" class="secondary" onclick="revNova()">Nova revisão</button>':'')
+    +'</div><div id="revBuscaStatus" style="display:none;margin-top:12px"></div></div>'
+    +'<div id="revCorpo"></div>';
+  w.innerHTML=h;
+  revRenderCorpo();
+}
+function revNova(){
+  if(REV.sujo && REV.fase==='form' && !confirm('Descartar a revisão em andamento?')) return;
+  revResetar(); revRender();
+  setTimeout(function(){ var i=document.getElementById('revNum'); if(i) i.focus(); },50);
+}
+function revStatusAudHtml(){
+  var st=statusAuditoriaLinha(REV.aud||{});
+  return '<div class="alert-box" style="background:#EAF7EE;border:1px solid #BFE3C8;color:#17633A"><span class="ic">✔</span><div>Atendimento <b>'+revEsc(REV.num)+'</b> encontrado na base de auditorias'
+    +(st.completo?' — auditoria <b>finalizada</b>.':' — auditoria <b>parcial</b> ('+st.respondidos+' de '+st.total+' itens). Itens que o auditor não respondeu aparecerão como "não respondido" na comparação.')
+    +'<br><span style="font-size:12px;opacity:.85">Modo cego: as respostas e o nome do auditor só aparecem depois que você finalizar.</span></div></div>';
+}
+function revRenderCorpo(){
+  var c=document.getElementById('revCorpo'); if(!c) return;
+  if(REV.fase==='busca'){ c.innerHTML=''; return; }
+  if(REV.fase==='existente'){
+    var ex=REV.existente||{}, rs=ex.resumo||{};
+    var quando=String(ex.data_revisao||'');
+    c.innerHTML='<div class="panel">'+revStatusAudHtml()
+      +'<div class="alert-box alert-partial" style="margin-top:10px"><span class="ic">ℹ️</span><div>Este atendimento <b>já foi revisado</b>'+(quando?' em '+revEsc(revDataBR(quando)):'')
+      +(rs.pct!==undefined&&rs.pct!==''?' — concordância de <b>'+revEsc(rs.pct)+'%</b> nos itens':'')+'.</div></div>'
+      +'<div class="actions" style="margin-top:12px"><button type="button" class="primary" onclick="revVerExistente()">Ver comparação</button>'
+      +'<button type="button" class="secondary" onclick="revRefazer()">Refazer revisão (substitui a anterior)</button></div></div>';
+    return;
+  }
+  if(REV.fase==='resultado'){ revRenderResultado(); return; }
+  // fase 'form'
+  c.innerHTML='<div class="panel">'+revStatusAudHtml()+'</div><div id="revFormHost"></div>';
+  revRenderForm();
+}
+function revVerExistente(){
+  var ex=REV.existente||{};
+  REV.ultima={rev:ex.rev||{}, aud:ex.aud||{}, meta:ex};
+  REV.fase='resultado'; revRenderCorpo();
+}
+function revRefazer(){
+  if(!confirm('Refazer a revisão do atendimento '+REV.num+'?\n\nA revisão anterior só será substituída quando você FINALIZAR a nova.')) return;
+  revResetarForm(); REV.fase='form'; revRenderCorpo();
+}
+function revRenderForm(){
+  var host=document.getElementById('revFormHost'); if(!host) return;
+  var y=window.scrollY;
+  var setores=SETORES.map(function(s){ var ck=REV.setores.indexOf(s)>=0?' checked':'';
+    return '<label class="rev-sec"><input type="checkbox" value="'+revEsc(s)+'"'+ck+' onchange="revToggleSetor(this)"> '+revEsc(s)+'</label>'; }).join('');
+  var opt=function(list,cur){ return '<option value="">Selecione</option>'+list.map(function(o){ return '<option'+(o===cur?' selected':'')+'>'+revEsc(o)+'</option>'; }).join(''); };
+  var tipoBtn=function(t,l){ return '<button type="button" class="tipo-btn'+(REV.tipo===t?' active':'')+'" onclick="revCampo(\'tipo\',\''+t+'\')">'+l+'</button>'; };
+  var itens=ITEMS.map(function(it){ return '<div class="item'+(it.novo?' novo':'')+'"><div class="domain" style="color:'+DOMAIN_MAP[it.domain]+'">'+it.domain+'</div><div class="item-header"><div class="num'+(it.novo?' new':'')+'">'+it.num+'</div><div class="item-text">'+it.text+'</div></div>'+revChoices('item_'+it.num, it.opts)+'</div>'; }).join('');
+  var fis=ITEMS_FISICO.map(function(it){ return '<div class="item"><div class="domain" style="color:'+(DOMAIN_MAP[it.domain]||'var(--muted)')+'">'+it.domain+'</div><div class="item-header"><div class="num">F'+it.num+'</div><div class="item-text">'+it.text+'</div></div>'+revChoices('fis_item_'+it.num, it.opts)+'</div>'; }).join('');
+  var multi=EQUIPES.map(function(eq){
+    var showSub=REV.cur[eq.keyPresenca]==='sim';
+    return '<div class="equipe-block '+eq.cssBlock+'"><div class="equipe-header"><div><div class="equipe-title" style="color:'+eq.cor+'">'+eq.label+'</div></div></div>'
+      +'<div class="sub-item"><div class="sub-item-text"><strong>'+eq.presencaText+'</strong></div>'+revChoices(eq.keyPresenca,['sim','não','não se aplica'])+'</div>'
+      +'<div class="sub-items '+(showSub?'visible':'')+'">'+eq.subItens.map(function(si){
+        var showSS=REV.cur[si.key]==='sim' && si.subSub.length>0;
+        return '<div class="sub-item"><div class="sub-item-text">'+si.text+'</div>'+revChoices(si.key,['sim','não','não se aplica'])
+          +(si.subSub.length?'<div class="sub-sub-items '+(showSS?'visible':'')+'">'+si.subSub.map(function(ss){ return '<div class="ssub-item"><div class="ssub-item-text">'+ss.text+'</div>'+revChoices(ss.key,['sim','não','não se aplica'])+'</div>'; }).join('')+'</div>':'')+'</div>';
+      }).join('')+'</div></div>';
+  }).join('');
+  var esc=revEscopo(), resp=esc.filter(function(k){ return !!REV.cur[k]; }).length;
+  host.innerHTML=
+    '<div class="panel"><div class="panel-head"><div><h2>Identificação (revisor)</h2><p class="sub">Preencha como se fosse uma auditoria nova.</p></div></div>'
+    +'<div class="section-label">Setor(es) auditado(s)</div><div class="rev-sec-grid">'+setores+'</div>'
+    +'<div class="meta meta-3" style="margin-top:12px">'
+    +'<div class="field"><label>Tipo de internação</label><select onchange="revCampo(\'tipoInt\',this.value)">'+opt(REV_TIPOINT,REV.tipoInt)+'</select></div>'
+    +'<div class="field"><label>Dias de internação</label><input type="number" min="0" value="'+revEsc(REV.dias)+'" oninput="revCampo(\'dias\',this.value)" placeholder="Ex.: 5"></div>'
+    +'<div class="field"><label>Desfecho</label><select onchange="revCampo(\'desfecho\',this.value)">'+opt(REV_DESFECHO,REV.desfecho)+'</select></div>'
+    +'</div></div>'
+    +'<div class="panel"><div class="panel-head"><div><h2>Tipo de prontuário</h2></div></div><div style="display:flex;gap:10px;flex-wrap:wrap">'+tipoBtn('online','Prontuário online')+tipoBtn('fisico','Prontuário físico')+tipoBtn('ambos','Ambos')+'</div></div>'
+    +(REV.tipo!=='fisico'?'<div class="panel"><div class="panel-head"><div><h2>Itens — documentação geral</h2></div></div><div class="audit-grid">'+itens+'</div></div>':'')
+    +(REV.tipo!=='online'?'<div class="panel"><div class="panel-head"><div><h2>Itens exclusivos — prontuário físico</h2></div></div><div class="audit-grid">'+fis+'</div></div>':'')
+    +'<div class="panel"><div class="panel-head"><div><h2>Equipe multiprofissional</h2></div></div>'+multi+'</div>'
+    +'<div class="panel"><div class="panel-head"><div><h2>Observações da revisão</h2><p class="sub">Opcional — fica só na revisão.</p></div></div><textarea id="revObs" maxlength="5000" oninput="revCampo(\'obs\',this.value)" style="width:100%;min-height:80px;border:1.5px solid var(--line);border-radius:12px;padding:12px;font-family:\'DM Sans\',sans-serif;font-size:13px;background:var(--card);color:var(--ink)">'+revEsc(REV.obs)+'</textarea></div>'
+    +'<div class="panel" style="padding-bottom:8px"><div style="font-size:12px;color:var(--muted);margin-bottom:10px">'+resp+' de '+esc.length+' itens respondidos</div>'
+    +'<div class="actions"><button type="button" class="primary" id="revBtnFinalizar" onclick="revFinalizar()">Finalizar revisão e comparar</button><button type="button" class="secondary" onclick="revNova()">Cancelar</button></div></div>';
+  try{ window.scrollTo(0,y); }catch(e){}
+}
+
+/* ---- 3. comparação (mesma lógica no dashboard.html) ---- */
+function revNormIdent(k,v){
+  var s=String(v==null?'':v).trim();
+  if(k==='setor_auditado') return s.split('|').map(function(x){return x.trim();}).filter(Boolean).sort().join(' | ');
+  if(k==='dias_internacao'){ var n=s.replace(/[^0-9]/g,''); return n===''?'':String(parseInt(n,10)); }
+  if(k==='tipo_prontuario') return s.toLowerCase();
+  return s;
+}
+function revComparar(rev, aud){
+  var linhas=[], r={comparados:0,concordantes:0,divergentes:0,omitidos:0,extras:0,div_sim_nao:0,div_nao_sim:0,div_na:0,ident_comparados:0,ident_div:0};
+  var divItens=[], identCampos=[];
+  REV_IDENT.forEach(function(p){
+    var k=p[0], a=revNormIdent(k,aud[k]), v=revNormIdent(k,rev[k]); if(!a && !v) return;
+    var st=(a&&v)?(a===v?'ok':'div'):(!a?'omit':'extra');
+    if(st==='ok'||st==='div'){ r.ident_comparados++; if(st==='div'){ r.ident_div++; identCampos.push(k); } }
+    linhas.push({k:k, sec:'Identificação', txt:p[1], a:String(aud[k]==null?'':aud[k]), r:String(rev[k]==null?'':rev[k]), st:st, ident:true});
+  });
+  revTodasChaves().forEach(function(k){
+    var a=revNorm(aud[k]), v=revNorm(rev[k]); if(!a && !v) return;
+    var st=(a&&v)?(a===v?'ok':'div'):(!a?'omit':'extra'), tipo='';
+    if(st==='ok'){ r.comparados++; r.concordantes++; }
+    else if(st==='div'){ r.comparados++; r.divergentes++; divItens.push(k);
+      if(a==='sim'&&v==='nao'){ r.div_sim_nao++; tipo='sim_nao'; } else if(a==='nao'&&v==='sim'){ r.div_nao_sim++; tipo='nao_sim'; } else { r.div_na++; tipo='na'; } }
+    else if(st==='omit') r.omitidos++; else r.extras++;
+    var rot=revRotulo(k);
+    linhas.push({k:k, sec:rot.sec, txt:rot.txt, a:revLbl(a), r:revLbl(v), st:st, tipo:tipo});
+  });
+  r.pct=r.comparados?Math.round(r.concordantes/r.comparados*100):'';
+  r.div_itens=divItens.join(',').slice(0,1000); r.ident_campos=identCampos.join(',');
+  return {linhas:linhas, resumo:r};
+}
+
+/* ---- 4. finalizar: valida, grava revisoes/<nº>, mostra a comparação ---- */
+function revMontarRev(){
+  var out={}, esc=revEscopo();
+  esc.forEach(function(k){ if(REV.cur[k]) out[k]=revLbl(REV.cur[k]); });
+  if(REV.setores.length) out.setor_auditado=REV.setores.join(' | ');
+  if(REV.tipoInt) out.tipo_internacao=REV.tipoInt;
+  if(REV.dias!=='') out.dias_internacao=String(REV.dias);
+  if(REV.desfecho) out.desfecho=REV.desfecho;
+  out.tipo_prontuario=REV.tipo;
+  if(REV.obs.trim()) out.observacoes=REV.obs.trim().slice(0,5000);
+  return out;
+}
+function revMontarAud(row){
+  var out={}, perm=revTodasChaves().concat(REV_IDENT.map(function(p){return p[0];})).concat(['observacoes']);
+  perm.forEach(function(k){ var v=row?row[k]:null; if(v===undefined||v===null) return; v=String(v); if(v==='') return; out[k]=v.slice(0, k==='observacoes'?5000:1000); });
+  return out;
+}
+async function revFinalizar(){
+  if(REV.salvando || REV.fase!=='form') return;
+  if(!revEhOwner()){ alert('Acesso restrito ao administrador.'); return; }
+  var falta=[];
+  if(!REV.setores.length) falta.push('setor auditado');
+  if(!REV.tipoInt) falta.push('tipo de internação');
+  if(!REV.desfecho) falta.push('desfecho');
+  var pend=revEscopo().filter(function(k){ return !REV.cur[k]; });
+  if(falta.length || pend.length){
+    alert('A revisão precisa estar COMPLETA para ser comparada.\n\n'
+      +(falta.length?'Identificação pendente: '+falta.join(', ')+'.\n':'')
+      +(pend.length?pend.length+' item(ns) sem resposta:\n'+pend.slice(0,12).map(function(k){ return '- '+revRotulo(k).txt.slice(0,70); }).join('\n')+(pend.length>12?'\n…':''):''));
+    return;
+  }
+  REV.salvando=true;
+  var btn=document.getElementById('revBtnFinalizar'); if(btn){ btn.disabled=true; btn.textContent='Gravando…'; }
+  try{
+    initFirebase(); await waitForAuth();
+    if(!revUidOk()) throw new Error('sessão do administrador não confirmada pelo Firebase — saia e entre de novo');
+    var lido=await revLerAuditoria(REV.num);   // cópia ATUAL da auditoria do auditor (pode ter mudado desde o carregamento)
+    if(lido.erro) throw new Error(lido.erro);
+    if(!lido.row) throw new Error('a auditoria deste atendimento não está mais na base');
+    var row=lido.row, rev=revMontarRev(), aud=revMontarAud(row);
+    var cmp=revComparar(rev, aud), st=statusAuditoriaLinha(row);
+    var resumo={}; Object.keys(cmp.resumo).forEach(function(k){ var v=cmp.resumo[k]; if(v!=='' && v!==undefined) resumo[k]=v; });
+    var obj={
+      numero_atendimento:REV.num, revisor:OWNER_LOGIN, revisor_nome:String((currentUser&&currentUser.name)||'').slice(0,120),
+      auditor:String(row.auditor||'').slice(0,120), login_auditor:String(row.login||'').slice(0,30),
+      data_auditoria:String(row.data_auditoria==null?'':row.data_auditoria).slice(0,40),
+      data_revisao:fmtSaoPaulo(relogioAgora(), true), status_auditoria:st.completo?'completa':'parcial',
+      revisadoEm:firebase.database.ServerValue.TIMESTAMP, rev:rev, aud:aud, resumo:resumo
+    };
+    await _audTeto(fbDB.ref('revisoes/'+REV.num).set(obj), 30000, 'o Firebase não confirmou a gravação em 30 s (conexão?)');
+    REV.sujo=false; REV.existente=obj;
+    REV.ultima={rev:rev, aud:aud, meta:obj};
+    REV.fase='resultado'; revRenderCorpo();
+    try{ window.scrollTo({top:0,behavior:'smooth'}); }catch(e){}
+  }catch(e){
+    alert('⛔ A revisão NÃO foi gravada.\n\n'+(mIsPermDenied(e)?'O Firebase recusou (permissão). As regras v34 já foram publicadas?':String((e&&e.message)||e))+'\n\nAs respostas continuam no formulário.');
+  }finally{
+    REV.salvando=false; if(btn){ btn.disabled=false; btn.textContent='Finalizar revisão e comparar'; }
+  }
+}
+function revDataBR(s){ var m=/^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}:\d{2}))?/.exec(String(s||'')); return m?(m[3]+'/'+m[2]+'/'+m[1]+(m[4]?' '+m[4]:'')):String(s||''); }
+function revBadge(st,tipo){
+  if(st==='ok') return '<span class="rev-b rev-ok">✔ Concorda</span>';
+  if(st==='div') return '<span class="rev-b rev-div">✗ Diverge'+(tipo==='sim_nao'?' (Sim→Não)':tipo==='nao_sim'?' (Não→Sim)':tipo==='na'?' (N/A)':'')+'</span>';
+  if(st==='omit') return '<span class="rev-b rev-omit">Auditor não respondeu</span>';
+  return '<span class="rev-b rev-extra">Fora do escopo do revisor</span>';
+}
+function revToggleSoDiv(on){ REV.soDiv=!!on; revRenderResultado(); }
+function revRenderResultado(){
+  var c=document.getElementById('revCorpo'); if(!c || !REV.ultima) return;
+  var u=REV.ultima, m=u.meta||{}, cmp=revComparar(u.rev||{}, u.aud||{}), r=cmp.resumo;
+  var cor=r.pct===''?'var(--muted)':r.pct>=90?'var(--green)':r.pct>=75?'var(--amber)':'var(--red)';
+  var linhas=cmp.linhas.filter(function(l){ return !REV.soDiv || l.st!=='ok'; });
+  var sec='', corpo='';
+  linhas.forEach(function(l){
+    if(l.sec!==sec){ sec=l.sec; corpo+='<tr class="rev-sec-row"><td colspan="4">'+revEsc(sec)+'</td></tr>'; }
+    var a=revEsc(l.a)||'—', v=revEsc(l.r)||'—';
+    corpo+='<tr class="'+(l.st==='div'?'rev-tr-div':l.st==='ok'?'':'rev-tr-omit')+'"><td>'+revEsc(l.txt)+'</td><td class="rev-c">'+a+'</td><td class="rev-c">'+v+'</td><td>'+revBadge(l.st,l.tipo)+'</td></tr>';
+  });
+  if(!corpo) corpo='<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:18px">Nenhuma divergência. 🎉</td></tr>';
+  c.innerHTML='<div class="panel">'
+    +'<div class="panel-head"><div><h2>Comparação — atendimento '+revEsc(m.numero_atendimento||REV.num)+'</h2><p class="sub">Auditor: <b>'+revEsc(m.auditor||'—')+'</b>'+(m.data_auditoria?' · auditado em '+revEsc(revDataBR(m.data_auditoria)):'')+(m.data_revisao?' · revisado em '+revEsc(revDataBR(m.data_revisao)):'')+(m.status_auditoria==='parcial'?' · <b style="color:#C45000">auditoria parcial</b>':'')+'</p></div>'
+    +'<span class="chip" style="background:#EAF7EE;color:#17633A">✔ Revisão gravada</span></div>'
+    +'<div class="kpis rev-kpis">'
+    +'<div class="kpi"><small>Concordância (itens)</small><b style="color:'+cor+'">'+(r.pct===''?'—':r.pct+'%')+'</b><span>'+r.concordantes+' de '+r.comparados+' itens comparados</span></div>'
+    +'<div class="kpi"><small>Divergências</small><b style="color:'+(r.divergentes?'var(--red)':'var(--green)')+'">'+r.divergentes+'</b><span>Sim→Não: '+r.div_sim_nao+' · Não→Sim: '+r.div_nao_sim+' · N/A: '+r.div_na+'</span></div>'
+    +'<div class="kpi"><small>Não respondidos pelo auditor</small><b>'+r.omitidos+'</b><span>itens que você respondeu e ele não</span></div>'
+    +'<div class="kpi"><small>Identificação</small><b style="color:'+(r.ident_div?'var(--red)':'var(--green)')+'">'+(r.ident_comparados-r.ident_div)+'/'+r.ident_comparados+'</b><span>campos iguais'+(r.ident_div?' — divergem: '+revEsc(r.ident_campos.split(',').map(function(k){ var p=REV_IDENT.find(function(x){return x[0]===k;}); return p?p[1]:k; }).join(', ')):'')+'</span></div>'
+    +'</div>'
+    +'<p class="sub" style="margin:10px 0">"Sim→Não" = o auditor marcou <b>Sim</b> e a resposta correta (revisão) é <b>Não</b> (conformidade indevida). "Não→Sim" = o inverso. "N/A" = divergência de aplicabilidade.</p>'
+    +'<label style="display:inline-flex;gap:8px;align-items:center;font-size:12px;font-weight:700;color:var(--navy);margin-bottom:10px;cursor:pointer"><input type="checkbox"'+(REV.soDiv?' checked':'')+' onchange="revToggleSoDiv(this.checked)"> Mostrar só divergências e lacunas</label>'
+    +'<div class="tablewrap"><table class="rev-tab"><thead><tr><th>Item</th><th>Auditor</th><th>Revisão</th><th>Resultado</th></tr></thead><tbody>'+corpo+'</tbody></table></div>'
+    +(u.rev&&u.rev.observacoes?'<div style="margin-top:12px;font-size:12.5px"><b>Observações da revisão:</b> '+revEsc(u.rev.observacoes)+'</div>':'')
+    +'<div class="actions" style="margin-top:14px"><button type="button" class="primary" onclick="revNova()">Revisar outro atendimento</button></div>'
+    +'</div>';
+}
+window.addEventListener('beforeunload', function(e){ if(REV.ativo && REV.sujo && REV.fase==='form'){ e.preventDefault(); e.returnValue=''; } });
+</script>
 </body>
 </html>
